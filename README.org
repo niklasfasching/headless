@@ -1,5 +1,7 @@
 * minimal headless script runner
-Usage: =headless [entryScript] [...args]=
+Usage: =headless [command] [entryScript] [...args]=
+- command =run=: serve test html at =/run= and execute tests
+- command =serve=: serve test html at =/run=
 
 Run a headless browser and execute =entryScript=
 - the current directory is served at =window.baseUrl=
