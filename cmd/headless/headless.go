@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	log.SetFlags(0)
 	if len(os.Args) < 3 {
 		log.Fatal("not enough arguments: headless [command] [scriptFile] [...args]")
 	}
