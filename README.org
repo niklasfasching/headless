@@ -10,6 +10,19 @@ Run a headless browser and execute =entryScript=
   - the method is called =close= rather than =exit= because =window.close= always [[https://www.google.com/search?channel=fs&client=ubuntu&q=window+close][exists]] and thus does not couple the script to =headless=
 - call =console.log=, ... to log to the console
 
+* Example
+=index.js=
+#+begin_src js
+console.log("hello", window.args)
+window.close(42)
+#+end_src
+
+#+begin_src bash
+$ headless run index.js world
+2020/08/31 00:00:00 hello ["world"]
+$ echo $?
+42
+#+end_src
 * Motivation
 I want to run js in a headless browser from bash - e.g. to automate running my clientside js tests.
 There's a lot of js test runners and libraries for controlling headless browsers out there already.
