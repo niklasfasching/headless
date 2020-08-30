@@ -20,11 +20,12 @@ var htmlTemplate = `
   <head>
     <meta charset=utf-8>
     <script type=module>
-    console.clear(-1); // notify start - import errors can't be caught - script isn't run at all
+    const isHeadless = navigator.webdriver
+    if (isHeadless) console.clear(-1); // notify start - import errors can't be caught - script isn't run at all
 
     window.baseUrl = '%s';
     window.args = %s;
-    window.close = (code = 0) => console.clear(code);
+    window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit: ', code);
 
     for (const name of ['debug', 'info', 'error', 'warn', 'log']) {
       const f = console[name];
