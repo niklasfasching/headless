@@ -217,7 +217,9 @@ func (p *Page) Execute(method string, params, result interface{}) error {
 	if err := websocket.JSON.Send(p.socket, msg); err != nil {
 		return err
 	}
+	p.RLock()
 	r := <-p.commands[id]
+	p.RUnlock()
 	p.Lock()
 	delete(p.commands, id)
 	p.Unlock()
