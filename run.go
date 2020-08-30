@@ -20,9 +20,7 @@ var htmlTemplate = `
   <head>
     <meta charset=utf-8>
     <script type=module>
-    const isHeadless = navigator.webdriver
-    if (isHeadless) console.clear(-1); // notify start - import errors can't be caught - script isn't run at all
-
+    window.isHeadless = navigator.webdriver;
     window.baseUrl = '%s';
     window.args = %s;
     window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit: ', code);
@@ -31,9 +29,11 @@ var htmlTemplate = `
       const f = console[name];
       console[name] = (...args) => f.call(console, args.map(arg => Object(arg) === arg ? JSON.stringify(arg) : arg?.toString()).join(' '));
     }
-
-    import '%s';
     </script>
+    <script type=module>
+    if (isHeadless) console.clear(-1); // notify start - import errors can't be caught - script isn't run at all
+    import '%s';
+    </script>;
   </head>
 </html>
 `
