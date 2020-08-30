@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -172,6 +173,35 @@ func (p *Page) Subscribe(domain, event string, f func(interface{})) error {
 		}
 	}()
 	return nil
+}
+
+func (p *Page) Unsubscribe(domain, event string) error {
+	p.Lock()
+	delete(p.events, domain+"."+event)
+	p.Unlock()
+	unsubscribe := true
+	p.RLock()
+	for k := range p.events {
+		if strings.HasPrefix(k, domain) {
+			unsubscribe = false
+		}
+	}
+	p.RUnlock()
+	if unsubscribe {
+		if err := p.Execute(domain+".disable", nil, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Page) Await(domain, event string) (chan interface{}, error) {
+	c := make(chan interface{})
+	err := p.Subscribe(domain, event, func(v interface{}) {
+		p.Unsubscribe(domain, event)
+		c <- v
+	})
+	return c, err
 }
 
 func (p *Page) Execute(method string, params, result interface{}) error {

@@ -119,12 +119,16 @@ func Run(b *Browser, url string) error {
 		c <- fmt.Errorf("unexpected error: %s", string(bs))
 	})
 	go func() {
+		loaded, err := p.Await("Page", "frameStoppedLoading")
+		if err != nil {
+			c <- err
+		}
 		if err := p.Execute("Page.navigate", map[string]string{"url": url}, nil); err != nil {
 			c <- err
 		}
-		<-time.After(1 * time.Second)
+		<-loaded
 		if !started {
-			log.Printf("timeout: script did not call start() after 1s - check the console at %s", url)
+			log.Printf("script did not call start(). check the console at %s", url)
 			<-time.After(30 * time.Second)
 			c <- fmt.Errorf("timeout: script did not call start() after 30s")
 		}
