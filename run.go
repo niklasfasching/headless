@@ -7,9 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 )
 
@@ -60,21 +58,7 @@ func ServeAndRun(address, servePath, fileName string, args []string) {
 	}()
 
 	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
-	if err := b.Start(); err != nil {
-		log.Fatal(err)
-	}
-	defer b.Stop()
-
-	signals := make(chan os.Signal)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-signals
-		b.Stop()
-		os.Exit(1)
-	}()
-
 	if err := Run(b, "http://"+address+servePath); err != nil {
-		b.Stop()
 		switch x := err.(type) {
 		case exitCode:
 			os.Exit(int(x))
@@ -86,6 +70,12 @@ func ServeAndRun(address, servePath, fileName string, args []string) {
 
 func Run(b *Browser, url string) error {
 	c := make(chan error)
+
+	if err := b.Start(); err != nil {
+		return err
+	}
+	defer b.Stop()
+
 	p, err := b.OpenPage()
 	if err != nil {
 		return err
