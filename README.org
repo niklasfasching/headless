@@ -1,10 +1,8 @@
 * minimal headless script runner
-Usage: =headless [command] [entryScript] [...args]=
-- command =run=: serve test html at =/run= and execute tests
-- command =serve=: serve test html at =/run=
+Usage: =headless [command] [scriptFile] [...args]=
+- command =run=: serve index.html based on script file at =/$(dirname scriptFile)= *and run it*
+- command =serve=: serve index.html based on script file at =/$(dirname scriptFile)=
 
-Run a headless browser and execute =entryScript=
-- the current directory is served at =window.baseUrl=
 - command line arguments are available as =window.args=
 - call =window.close(code)= to exit the process
   - the method is called =close= rather than =exit= because =window.close= always [[https://www.google.com/search?channel=fs&client=ubuntu&q=window+close][exists]] and thus does not couple the script to =headless=

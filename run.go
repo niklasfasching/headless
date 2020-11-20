@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -32,7 +31,7 @@ var htmlTemplate = `
     </script>
     <script type=module>
     if (isHeadless) console.clear(-1); // notify start - import errors can't be caught - script isn't run at all
-    import '%s';
+    import './%s';
     </script>;
   </head>
 </html>
@@ -42,21 +41,22 @@ type exitCode int
 
 func (e exitCode) Error() string { return strconv.Itoa(int(e)) }
 
-func Serve(address, scriptFile string, args []string) error {
-	http.Handle("/run", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		argsBytes, _ := json.Marshal(args)
-		if !strings.HasPrefix(scriptFile, "./") {
-			scriptFile = "./" + scriptFile
+func Serve(address, servePath, fileName string, args []string) error {
+	fs := http.FileServer(http.Dir("./"))
+	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == servePath {
+			argsBytes, _ := json.Marshal(args)
+			fmt.Fprintf(w, htmlTemplate, "http://"+address, string(argsBytes), fileName)
+		} else {
+			fs.ServeHTTP(w, r)
 		}
-		fmt.Fprintf(w, htmlTemplate, "http://"+address, string(argsBytes), scriptFile)
 	}))
-	http.Handle("/", http.FileServer(http.Dir("./")))
 	return http.ListenAndServe(address, nil)
 }
 
-func ServeAndRun(address, scriptFile string, args []string) {
+func ServeAndRun(address, servePath, fileName string, args []string) {
 	go func() {
-		log.Fatal(Serve(address, scriptFile, args))
+		log.Fatal(Serve(address, servePath, fileName, args))
 	}()
 
 	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
@@ -73,7 +73,7 @@ func ServeAndRun(address, scriptFile string, args []string) {
 		os.Exit(1)
 	}()
 
-	if err := Run(b, "http://"+address+"/run"); err != nil {
+	if err := Run(b, "http://"+address+servePath); err != nil {
 		b.Stop()
 		switch x := err.(type) {
 		case exitCode:
