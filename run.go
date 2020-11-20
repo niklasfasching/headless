@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 )
@@ -52,33 +51,26 @@ func Serve(address, servePath, fileName string, args []string) error {
 	return http.ListenAndServe(address, nil)
 }
 
-func ServeAndRun(address, servePath, fileName string, args []string) {
+func ServeAndRun(address, servePath, fileName string, args []string) (int, error) {
 	go func() {
 		log.Fatal(Serve(address, servePath, fileName, args))
 	}()
 
 	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
-	if err := Run(b, "http://"+address+servePath); err != nil {
-		switch x := err.(type) {
-		case exitCode:
-			os.Exit(int(x))
-		default:
-			log.Fatal(err)
-		}
-	}
+	return Run(b, "http://"+address+servePath)
 }
 
-func Run(b *Browser, url string) error {
+func Run(b *Browser, url string) (int, error) {
 	c := make(chan error)
 
 	if err := b.Start(); err != nil {
-		return err
+		return -1, err
 	}
 	defer b.Stop()
 
 	p, err := b.OpenPage()
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	started := false
@@ -125,7 +117,12 @@ func Run(b *Browser, url string) error {
 		<-time.After(60 * time.Second)
 		c <- fmt.Errorf("timeout: script did not call exit() after 60s")
 	}()
-	return <-c
+	switch err := (<-c).(type) {
+	case exitCode:
+		return int(err), nil
+	default:
+		return -1, err
+	}
 }
 
 func GetFreePort() string {

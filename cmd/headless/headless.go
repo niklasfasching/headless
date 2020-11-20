@@ -17,7 +17,12 @@ func main() {
 	servePath, fileName := "/"+path.Dir(path.Clean(os.Args[2]))+"/index.html", path.Base(path.Clean(os.Args[2]))
 	switch cmd := os.Args[1]; cmd {
 	case "run":
-		goheadless.ServeAndRun(address, servePath, fileName, os.Args[3:])
+		exitCode, err := goheadless.ServeAndRun(address, servePath, fileName, os.Args[3:])
+		if err != nil {
+			log.Fatal(err)
+		} else {
+			os.Exit(exitCode)
+		}
 	case "serve":
 		log.Println("http://" + address + servePath)
 		goheadless.Serve(address, servePath, fileName, os.Args[3:])
