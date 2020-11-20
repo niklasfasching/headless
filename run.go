@@ -51,29 +51,27 @@ func Serve(address, servePath, fileName string, args []string) error {
 	return http.ListenAndServe(address, nil)
 }
 
-func ServeAndRun(address, servePath, fileName string, args []string) (int, error) {
+func ServeAndRun(out chan string, address, servePath, fileName string, args []string) (int, error) {
 	go func() {
 		log.Fatal(Serve(address, servePath, fileName, args))
 	}()
 
 	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
-	return Run(b, "http://"+address+servePath)
+	return Run(out, b, "http://"+address+servePath)
 }
 
-func Run(b *Browser, url string) (int, error) {
-	c := make(chan error)
-
+func Run(out chan string, b *Browser, url string) (int, error) {
+	defer func() { close(out) }()
 	if err := b.Start(); err != nil {
 		return -1, err
 	}
 	defer b.Stop()
-
 	p, err := b.OpenPage()
 	if err != nil {
 		return -1, err
 	}
 
-	started := false
+	c, started := make(chan error), false
 	p.Subscribe("Runtime", "consoleAPICalled", func(params interface{}) {
 		m := params.(map[string]interface{})
 		switch m["type"] {
@@ -91,8 +89,7 @@ func Run(b *Browser, url string) (int, error) {
 			}
 		case "debug", "info", "error", "warn", "log":
 			args := m["args"].([]interface{})
-			msg := args[0].(map[string]interface{})["value"].(string)
-			log.Println(msg)
+			out <- args[0].(map[string]interface{})["value"].(string)
 		}
 	})
 
