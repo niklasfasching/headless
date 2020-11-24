@@ -16,17 +16,20 @@ func main() {
 	servePath, fileName := goheadless.SplitPath(os.Args[2])
 	switch cmd := os.Args[1]; cmd {
 	case "run":
-		out := make(chan string)
+		out, f := make(chan string), func() {}
 		go func() {
 			for msg := range out {
 				log.Println(msg)
 			}
+			f()
 		}()
 		exitCode, err := goheadless.ServeAndRun(out, address, servePath, fileName, os.Args[3:])
-		if err != nil {
-			log.Fatal(err)
-		} else {
-			os.Exit(exitCode)
+		f = func() {
+			if err != nil {
+				log.Fatal(err)
+			} else {
+				os.Exit(exitCode)
+			}
 		}
 	case "serve":
 		log.Println("http://" + address + servePath)
