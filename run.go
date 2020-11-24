@@ -6,7 +6,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -129,4 +131,13 @@ func GetFreePort() string {
 	}
 	defer l.Close()
 	return strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+}
+
+func SplitPath(p string) (servePath string, fileName string) {
+	p = "/" + p
+	directory := path.Clean(path.Dir(p))
+	if !strings.HasSuffix(directory, "/") {
+		directory += "/"
+	}
+	return directory + "index.html", path.Base(path.Clean(p))
 }
