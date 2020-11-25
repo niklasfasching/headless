@@ -41,7 +41,9 @@ func (b *Browser) Stop() error {
 	if b.cmd == nil {
 		return nil
 	}
-	return b.cmd.Process.Kill()
+	err := b.cmd.Process.Kill()
+	b.cmd = nil
+	return err
 }
 
 func (b *Browser) Start() error {
@@ -145,7 +147,9 @@ func (p *Page) receiveLoop() {
 			}
 		}
 	}
-	log.Println(fmt.Errorf("end of receive loop: %s", p.err))
+	if p.Browser.cmd != nil {
+		panic(fmt.Errorf("end of receive loop: %s", p.err))
+	}
 }
 
 func (p *Page) Disconnect() error {
