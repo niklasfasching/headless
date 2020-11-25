@@ -21,7 +21,6 @@ var htmlTemplate = `
     <meta charset=utf-8>
     <script type=module>
     window.isHeadless = navigator.webdriver;
-    window.baseUrl = '%s';
     window.args = %s;
     window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit: ', code);
 
@@ -55,7 +54,7 @@ func Serve(address, servePath, fileName string, args []string) *http.Server {
 			json.NewEncoder(w).Encode(files)
 		} else if r.URL.Path == servePath {
 			argsBytes, _ := json.Marshal(args)
-			fmt.Fprintf(w, htmlTemplate, "http://"+address, string(argsBytes), fileName)
+			fmt.Fprintf(w, htmlTemplate, string(argsBytes), fileName)
 		} else {
 			fs.ServeHTTP(w, r)
 		}
@@ -70,12 +69,12 @@ func Serve(address, servePath, fileName string, args []string) *http.Server {
 
 func ServeAndRun(ctx context.Context, out chan string, address, servePath, fileName string, args []string) (int, error) {
 	s := Serve(address, servePath, fileName, args)
-	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
 	defer s.Close()
-	return Run(ctx, out, b, "http://"+address+servePath)
+	return Run(ctx, out, "http://"+address+servePath)
 }
 
-func Run(ctx context.Context, out chan string, b *Browser, url string) (int, error) {
+func Run(ctx context.Context, out chan string, url string) (int, error) {
+	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
 	defer func() { close(out) }()
 	if err := b.Start(); err != nil {
 		return -1, err
