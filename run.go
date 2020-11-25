@@ -1,6 +1,7 @@
 package goheadless
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -67,14 +68,14 @@ func Serve(address, servePath, fileName string, args []string) *http.Server {
 	return s
 }
 
-func ServeAndRun(out chan string, address, servePath, fileName string, args []string) (int, error) {
+func ServeAndRun(ctx context.Context, out chan string, address, servePath, fileName string, args []string) (int, error) {
 	s := Serve(address, servePath, fileName, args)
 	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
 	defer s.Close()
-	return Run(out, b, "http://"+address+servePath)
+	return Run(ctx, out, b, "http://"+address+servePath)
 }
 
-func Run(out chan string, b *Browser, url string) (int, error) {
+func Run(ctx context.Context, out chan string, b *Browser, url string) (int, error) {
 	defer func() { close(out) }()
 	if err := b.Start(); err != nil {
 		return -1, err
@@ -128,11 +129,16 @@ func Run(out chan string, b *Browser, url string) (int, error) {
 		<-time.After(60 * time.Second)
 		c <- fmt.Errorf("timeout: script did not call exit() after 60s")
 	}()
-	switch err := (<-c).(type) {
-	case exitCode:
-		return int(err), nil
-	default:
-		return -1, err
+	select {
+	case err := <-c:
+		switch err := err.(type) {
+		case exitCode:
+			return int(err), nil
+		default:
+			return -1, err
+		}
+	case <-ctx.Done():
+		return -1, nil
 	}
 }
 

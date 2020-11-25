@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -23,7 +24,8 @@ func main() {
 			}
 			f()
 		}()
-		exitCode, err := goheadless.ServeAndRun(out, address, servePath, fileName, os.Args[3:])
+		ctx := context.Background()
+		exitCode, err := goheadless.ServeAndRun(ctx, out, address, servePath, fileName, os.Args[3:])
 		f = func() {
 			if err != nil {
 				log.Fatal(err)
