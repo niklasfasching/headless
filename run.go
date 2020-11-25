@@ -3,6 +3,7 @@ package goheadless
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -43,7 +44,15 @@ func (e exitCode) Error() string { return strconv.Itoa(int(e)) }
 func Serve(address, servePath, fileName string, args []string) error {
 	fs := http.FileServer(http.Dir("./"))
 	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == servePath {
+		if r.Method == "POST" {
+			w.Header().Set("Content-Type", "application/json")
+			is, _ := ioutil.ReadDir(path.Join("./", r.URL.Path))
+			files := []string{}
+			for _, i := range is {
+				files = append(files, i.Name())
+			}
+			json.NewEncoder(w).Encode(files)
+		} else if r.URL.Path == servePath {
 			argsBytes, _ := json.Marshal(args)
 			fmt.Fprintf(w, htmlTemplate, "http://"+address, string(argsBytes), fileName)
 		} else {
