@@ -41,9 +41,9 @@ type exitCode int
 
 func (e exitCode) Error() string { return strconv.Itoa(int(e)) }
 
-func Serve(address, servePath, fileName string, args []string) error {
+func Serve(address, servePath, fileName string, args []string) *http.Server {
 	fs := http.FileServer(http.Dir("./"))
-	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := &http.Server{Addr: address, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			w.Header().Set("Content-Type", "application/json")
 			is, _ := ioutil.ReadDir(path.Join("./", r.URL.Path))
@@ -58,16 +58,19 @@ func Serve(address, servePath, fileName string, args []string) error {
 		} else {
 			fs.ServeHTTP(w, r)
 		}
-	}))
-	return http.ListenAndServe(address, nil)
+	})}
+	go func() {
+		if err := s.ListenAndServe(); err != http.ErrServerClosed {
+			panic(err)
+		}
+	}()
+	return s
 }
 
 func ServeAndRun(out chan string, address, servePath, fileName string, args []string) (int, error) {
-	go func() {
-		log.Fatal(Serve(address, servePath, fileName, args))
-	}()
-
+	s := Serve(address, servePath, fileName, args)
 	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
+	defer s.Close()
 	return Run(out, b, "http://"+address+servePath)
 }
 
