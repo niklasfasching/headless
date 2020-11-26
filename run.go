@@ -23,6 +23,11 @@ var htmlTemplate = `
     window.isHeadless = navigator.webdriver;
     window.args = %s;
     window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit: ', code);
+    window.onerror = (msg, src, line, col, err) => {
+      console.log(err.stack);
+      window.close();
+      return true;
+    };
 
     for (const name of ['debug', 'info', 'error', 'warn', 'log']) {
       const f = console[name];
