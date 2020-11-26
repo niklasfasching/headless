@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -49,7 +50,11 @@ func (b *Browser) Stop() error {
 func (b *Browser) Start() error {
 	args := []string{"--headless", "--disable-gpu", "--hide-scrollbars"}
 	if b.Executable == "" {
-		b.Executable = "chromium-browser"
+		if executable := os.Getenv("GOHEADLESS_EXECUTABLE"); executable != "" {
+			b.Executable = executable
+		} else {
+			b.Executable = "chromium-browser"
+		}
 	}
 	if b.Port == "" {
 		b.Port = "9000"

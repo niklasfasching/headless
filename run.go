@@ -74,7 +74,7 @@ func ServeAndRun(ctx context.Context, out chan string, address, servePath, fileN
 }
 
 func Run(ctx context.Context, out chan string, url string) (int, error) {
-	b := &Browser{Executable: "chromium-browser", Port: GetFreePort()}
+	b := &Browser{Port: GetFreePort()}
 	defer func() { close(out) }()
 	if err := b.Start(); err != nil {
 		return -1, err
