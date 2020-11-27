@@ -118,8 +118,8 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 	})
 
 	p.Subscribe("Runtime", "exceptionThrown", func(v interface{}) {
-		bs, _ := json.MarshalIndent(v, "", "  ")
-		c <- fmt.Errorf("unexpected error: %s", string(bs))
+		e := v.(map[string]interface{})["exceptionDetails"].(map[string]interface{})["exception"].(map[string]interface{})
+		c <- fmt.Errorf("unexpected error: %v", e["description"])
 	})
 	go func() {
 		loaded, err := p.Await("Page", "frameStoppedLoading")
