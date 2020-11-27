@@ -40,6 +40,11 @@ var htmlTemplate = `
 </html>
 `
 
+type Event struct {
+	Method string
+	Args   []interface{}
+}
+
 type exitCode int
 
 func (e exitCode) Error() string { return strconv.Itoa(int(e)) }
@@ -70,13 +75,13 @@ func Serve(address, servePath, fileName string, args []string) *http.Server {
 	return s
 }
 
-func ServeAndRun(ctx context.Context, out chan string, address, servePath, fileName string, args []string) (int, error) {
+func ServeAndRun(ctx context.Context, out chan Event, address, servePath, fileName string, args []string) (int, error) {
 	s := Serve(address, servePath, fileName, args)
 	defer s.Close()
 	return Run(ctx, out, "http://"+address+servePath)
 }
 
-func Run(ctx context.Context, out chan string, url string) (int, error) {
+func Run(ctx context.Context, out chan Event, url string) (int, error) {
 	b := &Browser{Port: GetFreePort()}
 	defer func() { close(out) }()
 	if err := b.Start(); err != nil {
@@ -95,7 +100,7 @@ func Run(ctx context.Context, out chan string, url string) (int, error) {
 		for i, arg := range args {
 			args[i] = arg.(map[string]interface{})["value"]
 		}
-		switch m["type"] {
+		switch method := m["type"].(string); method {
 		case "clear":
 			if len(args) != 0 {
 				code, ok := args[0].(float64)
@@ -108,11 +113,7 @@ func Run(ctx context.Context, out chan string, url string) (int, error) {
 				}
 			}
 		default:
-			if len(args) == 0 {
-				out <- ""
-			} else if s, ok := args[0].(string); ok {
-				out <- s
-			}
+			out <- Event{method, args}
 		}
 	})
 
