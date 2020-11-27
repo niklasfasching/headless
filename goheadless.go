@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -143,7 +142,7 @@ func (p *Page) receiveLoop() {
 			c, ok := p.commands[r.Id]
 			p.RUnlock()
 			if !ok {
-				log.Println("unexpected result", string(bs))
+				panic(fmt.Errorf("unexpected result: %s", string(bs)))
 			} else if r.Error != nil {
 				err := fmt.Errorf("%d: %s - %s", r.Error.Code, r.Error.Message, r.Error.Data)
 				c <- &response{json: r.Result, err: err}
@@ -173,9 +172,9 @@ func (p *Page) Subscribe(domain, event string, f func(interface{})) error {
 		for r := range c {
 			var x interface{}
 			if r.err != nil {
-				log.Println(domain, event, r.err)
+				panic(fmt.Errorf("%s.%s: %w", domain, event, r.err))
 			} else if err := json.Unmarshal(r.json, &x); err != nil {
-				log.Println(domain, event, err)
+				panic(fmt.Errorf("%s.%s: %w", domain, event, err))
 			} else {
 				f(x)
 			}
