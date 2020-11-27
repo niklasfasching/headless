@@ -29,13 +29,11 @@ var htmlTemplate = `
       return true;
     };
 
-    for (const name of ['debug', 'info', 'error', 'warn', 'log']) {
-      const f = console[name];
-      console[name] = (...args) => f.call(console, args.map(arg => Object(arg) === arg ? JSON.stringify(arg) : arg?.toString()).join(' '));
-    }
+    const f = console.log;
+    console.log = (...args) => f.call(console, args.map(arg => Object(arg) === arg ? JSON.stringify(arg) : arg?.toString()).join(' '));
     </script>
     <script type=module>
-    if (isHeadless) console.clear(-1); // notify start - import errors can't be caught - script isn't run at all
+    console.clear(-1); // notify start. import errors stop script from running at all
     import './%s';
     </script>;
   </head>
@@ -93,22 +91,28 @@ func Run(ctx context.Context, out chan string, url string) (int, error) {
 	c, started := make(chan error), false
 	p.Subscribe("Runtime", "consoleAPICalled", func(params interface{}) {
 		m := params.(map[string]interface{})
+		args := m["args"].([]interface{})
+		for i, arg := range args {
+			args[i] = arg.(map[string]interface{})["value"]
+		}
 		switch m["type"] {
 		case "clear":
-			if args := m["args"].([]interface{}); len(args) != 0 {
-				code, ok := args[0].(map[string]interface{})["value"].(float64)
+			if len(args) != 0 {
+				code, ok := args[0].(float64)
 				if !ok {
-					c <- fmt.Errorf("bad code: %v %v", args[0].(map[string]interface{})["value"], err)
-				}
-				if code == -1 {
+					c <- fmt.Errorf("bad code: %v %v", args[0], err)
+				} else if code == -1 {
 					started = true
 				} else {
 					c <- exitCode(code)
 				}
 			}
-		case "debug", "info", "error", "warn", "log":
-			args := m["args"].([]interface{})
-			out <- args[0].(map[string]interface{})["value"].(string)
+		default:
+			if len(args) == 0 {
+				out <- ""
+			} else if s, ok := args[0].(string); ok {
+				out <- s
+			}
 		}
 	})
 
