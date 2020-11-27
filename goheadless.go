@@ -118,11 +118,11 @@ func (p *Page) receiveLoop() {
 		}{}
 		bs := []byte{}
 		if err := websocket.Message.Receive(p.socket, &bs); err != nil {
-			p.err = err
+			p.err = fmt.Errorf("websocket: %w", err)
 			break
 		}
 		if err := json.Unmarshal(bs, r); err != nil {
-			p.err = err
+			p.err = fmt.Errorf("json: (%s) %w", string(bs), err)
 			break
 		}
 		if r.Method != "" {
