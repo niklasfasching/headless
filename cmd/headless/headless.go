@@ -20,7 +20,9 @@ func main() {
 		out, done := make(chan goheadless.Event), make(chan struct{})
 		go func() {
 			for event := range out {
-				if l := len(event.Args); l == 0 {
+				if event.Method == "info" {
+					log.Println(goheadless.Colorize(event))
+				} else if l := len(event.Args); l == 0 {
 					continue
 				} else if arg1, ok := event.Args[0].(string); ok && l == 1 {
 					log.Println(arg1)
