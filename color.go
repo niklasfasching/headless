@@ -32,6 +32,8 @@ func Colorize(e Event) string {
 			if m := colorRegexp.FindStringSubmatch(colorString); m != nil {
 				out += fmt.Sprintf("\033[%dm", Colors[m[1]])
 			}
+		} else {
+			out += fmt.Sprintf("\033[%dm", Colors["none"])
 		}
 		out += part
 	}
