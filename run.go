@@ -19,6 +19,9 @@ var htmlTemplate = `
 <html lang=en>
   <head>
     <meta charset=utf-8>
+    <style>
+      html, body, iframe { height: 100%%; width: 100%%; border: none; margin: 0; display: block; }
+    </style>
     <script type=module>
     window.isHeadless = navigator.webdriver;
     window.args = %s;
@@ -30,13 +33,22 @@ var htmlTemplate = `
       return true;
     };
 
+    window.openIframe = (src) => {
+      return new Promise((resolve, reject) => {
+        const iframe = document.createElement("iframe");
+        const onerror = reject;
+        const onload = () => resolve(iframe);
+        document.body.appendChild(Object.assign(iframe, {onload, onerror, src}));
+      });
+    };
+
     const f = console.log;
     console.log = (...args) => f.call(console, args.map(arg => Object(arg) === arg ? JSON.stringify(arg) : arg?.toString()).join(' '));
     </script>
     <script type=module>
     console.clear(-1); // notify start. import errors stop script from running at all
     import './%s';
-    </script>;
+    </script>
   </head>
 </html>
 `
