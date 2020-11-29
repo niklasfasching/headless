@@ -19,6 +19,7 @@ type Browser struct {
 	Executable string
 	Port       string
 	cmd        *exec.Cmd
+	stopped    bool
 }
 
 type Page struct {
@@ -37,13 +38,16 @@ type response struct {
 	err  error
 }
 
-func (b *Browser) Stop() error {
-	if b.cmd == nil {
-		return nil
+func (b *Browser) Stop() (*os.ProcessState, error) {
+	if b.stopped {
+		return nil, nil
 	}
-	err := b.cmd.Process.Kill()
-	b.cmd = nil
-	return err
+	b.stopped = true
+	if err := b.cmd.Process.Kill(); err != nil {
+		return nil, err
+	}
+	ps, err := b.cmd.Process.Wait()
+	return ps, err
 }
 
 func (b *Browser) Start() error {
@@ -151,7 +155,7 @@ func (p *Page) receiveLoop() {
 			}
 		}
 	}
-	if p.Browser.cmd != nil {
+	if !p.Browser.stopped {
 		panic(fmt.Errorf("end of receive loop: %s", p.err))
 	}
 }
