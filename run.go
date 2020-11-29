@@ -25,6 +25,7 @@ var htmlTemplate = `
     window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit: ', code);
     window.onerror = (msg, src, line, col, err) => {
       console.log(err.stack);
+      console.log("    at " + src + ":" + line + ":" + col);
       window.close();
       return true;
     };
