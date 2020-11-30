@@ -2,6 +2,7 @@ package goheadless
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -24,6 +25,9 @@ func Colorize(e Event) string {
 		return ""
 	}
 	raw, _ := e.Args[0].(string)
+	if fi, _ := os.Stdout.Stat(); (fi.Mode() & os.ModeCharDevice) == 0 {
+		return strings.ReplaceAll(raw, "%c", "")
+	}
 	parts := strings.Split(raw, "%c")
 	out := parts[0]
 	for i, part := range parts[1:] {
