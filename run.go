@@ -122,6 +122,7 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 				} else if code == -1 {
 					started = true
 				} else {
+					time.Sleep(10 * time.Millisecond)
 					c <- exitCode(code)
 				}
 			}
