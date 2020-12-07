@@ -25,7 +25,7 @@ var htmlTemplate = `
     <script type=module>
     window.isHeadless = navigator.webdriver;
     window.args = %s;
-    window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit: ', code);
+    window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit:', code);
     window.onerror = (msg, src, line, col, err) => {
       console.log(err.stack);
       console.log("    at " + src + ":" + line + ":" + col);
@@ -41,9 +41,6 @@ var htmlTemplate = `
         document.body.appendChild(Object.assign(iframe, {onload, onerror, src}));
       });
     };
-
-    const f = console.log;
-    console.log = (...args) => f.call(console, args.map(arg => Object(arg) === arg ? JSON.stringify(arg) : arg?.toString()).join(' '));
     </script>
     <script type=module>
     console.clear(-1); // notify start. import errors stop script from running at all
@@ -109,10 +106,7 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 	c, started := make(chan error), false
 	p.Subscribe("Runtime", "consoleAPICalled", func(params interface{}) {
 		m := params.(map[string]interface{})
-		args := m["args"].([]interface{})
-		for i, arg := range args {
-			args[i] = arg.(map[string]interface{})["value"]
-		}
+		args := resolveArgs(m["args"].([]interface{}))
 		switch method := m["type"].(string); method {
 		case "clear":
 			if len(args) != 0 {
@@ -163,6 +157,36 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 	case <-ctx.Done():
 		return -1, nil
 	}
+}
+
+func resolveArgs(args []interface{}) []interface{} {
+	for i, arg := range args {
+		arg := arg.(map[string]interface{})
+		switch t, st := arg["type"], arg["subtype"]; {
+		case t == "string", t == "number", t == "boolean", st == "null", t == "undefined":
+			args[i] = arg["value"]
+		case t == "function", st == "regexp":
+			args[i] = arg["description"]
+		default:
+			properties := arg["preview"].(map[string]interface{})["properties"].([]interface{})
+			kvs := make([]string, len(properties))
+			for i := range properties {
+				m := properties[i].(map[string]interface{})
+				k, v := m["name"].(string), m["value"].(string)
+				if st == "array" {
+					kvs[i] = v
+				} else {
+					kvs[i] = k + ": " + v
+				}
+			}
+			if st == "array" {
+				args[i] = "[" + strings.Join(kvs, ",") + "]"
+			} else {
+				args[i] = "{" + strings.Join(kvs, ",") + "}"
+			}
+		}
+	}
+	return args
 }
 
 func GetFreePort() string {

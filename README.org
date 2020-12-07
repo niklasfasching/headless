@@ -7,7 +7,13 @@ Usage: =headless [command] [scriptFile] [...args]=
 - call =window.close(code)= to exit the process
   - the method is called =close= rather than =exit= because =window.close= always [[https://www.google.com/search?channel=fs&client=ubuntu&q=window+close][exists]] and thus does not couple the script to =headless=
 - call =console.log=, ... to log to the console
-
+* Ideas
+- console.log overwriting breaks in iframes! need to json stringify in headless :/
+  -> also pass all arguments, not just first stringified!
+  json stringify each unless string?
+- fetch iframe with src proxied through ./ to allow access to contentDocument
+  set iframe.contentWindow.onerror
+  - bundle with a console.info based api to sqlite
 * Example
 =index.js=
 #+begin_src js
