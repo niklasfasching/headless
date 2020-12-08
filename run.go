@@ -55,6 +55,10 @@ type Event struct {
 }
 
 func Serve(address, code string, files, args []string) *http.Server {
+	servePath := "/"
+	if parts := strings.SplitN(address, "/", 2); len(parts) == 2 {
+		address, servePath = parts[0], "/"+parts[1]
+	}
 	for i, f := range files {
 		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
 			f = "./" + f
@@ -71,7 +75,7 @@ func Serve(address, code string, files, args []string) *http.Server {
 				files = append(files, i.Name())
 			}
 			json.NewEncoder(w).Encode(files)
-		} else if r.URL.Path == "/" {
+		} else if r.URL.Path == servePath {
 			argsBytes, _ := json.Marshal(args)
 			fmt.Fprintf(w, htmlTemplate, string(argsBytes), code, strings.Join(files, "\n"))
 		} else {
