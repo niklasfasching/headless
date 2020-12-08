@@ -53,10 +53,6 @@ type Event struct {
 	Args   []interface{}
 }
 
-type exitCode int
-
-func (e exitCode) Error() string { return strconv.Itoa(int(e)) }
-
 func Serve(address string, files, args []string) *http.Server {
 	for i, f := range files {
 		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
@@ -107,7 +103,7 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 		return -1, err
 	}
 
-	c, started := make(chan error), false
+	c, started := make(chan interface{}), false
 	p.Subscribe("Runtime", "consoleAPICalled", func(params interface{}) {
 		m := params.(map[string]interface{})
 		args := resolveArgs(m["args"].([]interface{}))
@@ -121,7 +117,7 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 					started = true
 				} else {
 					time.Sleep(10 * time.Millisecond)
-					c <- exitCode(code)
+					c <- int(code)
 				}
 			}
 		default:
@@ -152,10 +148,10 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 	select {
 	case err := <-c:
 		switch err := err.(type) {
-		case exitCode:
-			return int(err), nil
+		case int:
+			return err, nil
 		default:
-			return -1, err
+			return -1, err.(error)
 		}
 	case <-ctx.Done():
 		return -1, nil
