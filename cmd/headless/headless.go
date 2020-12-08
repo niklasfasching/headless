@@ -2,21 +2,25 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/niklasfasching/goheadless"
 )
 
+var address = flag.String("l", "localhost:"+goheadless.GetFreePort(), "listen address")
+var windowArgs = flag.String("a", "", "window.args - split via strings.Fields")
+var run = flag.Bool("r", false, "run served script")
+
 func main() {
 	log.SetFlags(0)
-	if len(os.Args) < 3 {
-		log.Fatal("not enough arguments: headless [command] [scriptFile] [...args]")
+	flag.Parse()
+	if strings.HasPrefix(*address, ":") {
+		*address = "0.0.0.0" + *address
 	}
-	address := "localhost:" + goheadless.GetFreePort()
-	servePath, fileName := goheadless.SplitPath(os.Args[2])
-	switch cmd := os.Args[1]; cmd {
-	case "run":
+	if *run {
 		out, done := make(chan goheadless.Event), make(chan struct{})
 		go func() {
 			for event := range out {
@@ -33,18 +37,16 @@ func main() {
 			close(done)
 		}()
 		ctx := context.Background()
-		exitCode, err := goheadless.ServeAndRun(ctx, out, address, servePath, fileName, os.Args[3:])
+		exitCode, err := goheadless.ServeAndRun(ctx, out, *address, flag.Args(), strings.Fields(*windowArgs))
 		<-done
 		if err != nil {
 			log.Fatal(err)
 		} else {
 			os.Exit(exitCode)
 		}
-	case "serve":
-		log.Println("http://" + address + servePath)
-		goheadless.Serve(address, servePath, fileName, os.Args[3:])
-
-	default:
-		log.Fatalf("unknown command: %s (run|serve)", cmd)
+	} else {
+		log.Println("http://" + *address)
+		goheadless.Serve(*address, flag.Args(), strings.Fields(*windowArgs))
+		select {}
 	}
 }

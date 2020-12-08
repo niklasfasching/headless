@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"path"
@@ -43,12 +42,11 @@ var htmlTemplate = `
     };
     </script>
     <script type=module>
-    console.clear(-1); // notify start. import errors stop script from running at all
-    import './%s';
+    %s
+    if (isHeadless) console.clear(-1); // notify start. import errors stop script from running at all
     </script>
   </head>
-</html>
-`
+</html>`
 
 type Event struct {
 	Method string
@@ -59,7 +57,13 @@ type exitCode int
 
 func (e exitCode) Error() string { return strconv.Itoa(int(e)) }
 
-func Serve(address, servePath, fileName string, args []string) *http.Server {
+func Serve(address string, files, args []string) *http.Server {
+	for i, f := range files {
+		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
+			f = "./" + f
+		}
+		files[i] = fmt.Sprintf(`import "%s";`, f)
+	}
 	fs := http.FileServer(http.Dir("./"))
 	s := &http.Server{Addr: address, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
@@ -70,9 +74,9 @@ func Serve(address, servePath, fileName string, args []string) *http.Server {
 				files = append(files, i.Name())
 			}
 			json.NewEncoder(w).Encode(files)
-		} else if r.URL.Path == servePath {
+		} else if r.URL.Path == "/" {
 			argsBytes, _ := json.Marshal(args)
-			fmt.Fprintf(w, htmlTemplate, string(argsBytes), fileName)
+			fmt.Fprintf(w, htmlTemplate, string(argsBytes), strings.Join(files, "\n"))
 		} else {
 			fs.ServeHTTP(w, r)
 		}
@@ -85,10 +89,10 @@ func Serve(address, servePath, fileName string, args []string) *http.Server {
 	return s
 }
 
-func ServeAndRun(ctx context.Context, out chan Event, address, servePath, fileName string, args []string) (int, error) {
-	s := Serve(address, servePath, fileName, args)
+func ServeAndRun(ctx context.Context, out chan Event, address string, files, args []string) (int, error) {
+	s := Serve(address, files, args)
 	defer s.Close()
-	return Run(ctx, out, "http://"+address+servePath)
+	return Run(ctx, out, "http://"+address)
 }
 
 func Run(ctx context.Context, out chan Event, url string) (int, error) {
@@ -139,9 +143,8 @@ func Run(ctx context.Context, out chan Event, url string) (int, error) {
 		}
 		<-loaded
 		if !started {
-			log.Printf("script did not call start(). check the console at %s", url)
-			<-time.After(30 * time.Second)
-			c <- fmt.Errorf("timeout: script did not call start() after 30s")
+			<-time.After(1 * time.Second)
+			c <- fmt.Errorf("timeout: script did not call start() after 1s")
 		}
 		<-time.After(60 * time.Second)
 		c <- fmt.Errorf("timeout: script did not call exit() after 60s")
@@ -196,13 +199,4 @@ func GetFreePort() string {
 	}
 	defer l.Close()
 	return strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
-}
-
-func SplitPath(p string) (servePath string, fileName string) {
-	p = "/" + p
-	directory := path.Clean(path.Dir(p))
-	if !strings.HasSuffix(directory, "/") {
-		directory += "/"
-	}
-	return directory + "index.html", path.Base(path.Clean(p))
 }
