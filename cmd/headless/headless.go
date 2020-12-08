@@ -13,6 +13,7 @@ import (
 var address = flag.String("l", "localhost:"+goheadless.GetFreePort(), "listen address")
 var windowArgs = flag.String("a", "", "window.args - split via strings.Fields")
 var run = flag.Bool("r", false, "run served script")
+var code = flag.String("c", "", "code snippet to run")
 
 func main() {
 	log.SetFlags(0)
@@ -37,7 +38,7 @@ func main() {
 			close(done)
 		}()
 		ctx := context.Background()
-		exitCode, err := goheadless.ServeAndRun(ctx, out, *address, flag.Args(), strings.Fields(*windowArgs))
+		exitCode, err := goheadless.ServeAndRun(ctx, out, *address, *code, flag.Args(), strings.Fields(*windowArgs))
 		<-done
 		if err != nil {
 			log.Fatal(err)
@@ -46,7 +47,7 @@ func main() {
 		}
 	} else {
 		log.Println("http://" + *address)
-		goheadless.Serve(*address, flag.Args(), strings.Fields(*windowArgs))
+		goheadless.Serve(*address, *code, flag.Args(), strings.Fields(*windowArgs))
 		select {}
 	}
 }

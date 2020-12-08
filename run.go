@@ -43,6 +43,7 @@ var htmlTemplate = `
     </script>
     <script type=module>
     %s
+    %s
     if (isHeadless) console.clear(-1); // notify start. import errors stop script from running at all
     </script>
   </head>
@@ -53,7 +54,7 @@ type Event struct {
 	Args   []interface{}
 }
 
-func Serve(address string, files, args []string) *http.Server {
+func Serve(address, code string, files, args []string) *http.Server {
 	for i, f := range files {
 		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
 			f = "./" + f
@@ -72,7 +73,7 @@ func Serve(address string, files, args []string) *http.Server {
 			json.NewEncoder(w).Encode(files)
 		} else if r.URL.Path == "/" {
 			argsBytes, _ := json.Marshal(args)
-			fmt.Fprintf(w, htmlTemplate, string(argsBytes), strings.Join(files, "\n"))
+			fmt.Fprintf(w, htmlTemplate, string(argsBytes), code, strings.Join(files, "\n"))
 		} else {
 			fs.ServeHTTP(w, r)
 		}
@@ -85,8 +86,8 @@ func Serve(address string, files, args []string) *http.Server {
 	return s
 }
 
-func ServeAndRun(ctx context.Context, out chan Event, address string, files, args []string) (int, error) {
-	s := Serve(address, files, args)
+func ServeAndRun(ctx context.Context, out chan Event, address, code string, files, args []string) (int, error) {
+	s := Serve(address, code, files, args)
 	defer s.Close()
 	return Run(ctx, out, "http://"+address)
 }
