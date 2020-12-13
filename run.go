@@ -126,7 +126,7 @@ func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, erro
 			if len(args) != 0 {
 				code, ok := args[0].(float64)
 				if !ok {
-					c <- fmt.Errorf("bad code: %v %v", args[0], err)
+					c <- fmt.Errorf("bad code: %v", args[0])
 				} else if code == -1 {
 					started = true
 				} else {
