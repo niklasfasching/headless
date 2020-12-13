@@ -63,6 +63,30 @@ type Runner struct {
 	Server *http.Server
 }
 
+type exceptionThrown struct {
+	ExceptionDetails struct {
+		Exception struct {
+			Description string
+		}
+	}
+}
+
+type consoleAPICall struct {
+	Args []struct {
+		Type        string
+		Subtype     string
+		Description string
+		Preview     struct {
+			Properties []struct {
+				Name  string
+				Value string
+			}
+		}
+		Value interface{}
+	}
+	Type string
+}
+
 func (r *Runner) Serve() {
 	argsBytes, _ := json.Marshal(r.Args)
 	address, servePath, code := r.Address, "/", r.Code
@@ -118,12 +142,12 @@ func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, erro
 	}
 
 	c, started := make(chan interface{}), false
-	p.Subscribe("Runtime", "consoleAPICalled", func(params interface{}) {
-		started = started || handleConsoleApiCall(params, out, c)
+	p.Subscribe("Runtime", "consoleAPICalled", func(params consoleAPICall) {
+		started = started || handleConsoleAPICall(params, out, c)
 	})
-	p.Subscribe("Runtime", "exceptionThrown", func(v interface{}) {
-		e := v.(map[string]interface{})["exceptionDetails"].(map[string]interface{})["exception"].(map[string]interface{})
-		c <- fmt.Errorf("unexpected error: %v", e["description"])
+
+	p.Subscribe("Runtime", "exceptionThrown", func(e exceptionThrown) {
+		c <- fmt.Errorf("unexpected error: %v", e.ExceptionDetails.Exception.Description)
 	})
 
 	go func() {
@@ -150,10 +174,9 @@ func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, erro
 	}
 }
 
-func handleConsoleApiCall(params interface{}, events chan Event, errors chan interface{}) bool {
-	m := params.(map[string]interface{})
-	args := resolveArgs(m["args"].([]interface{}))
-	switch method := m["type"].(string); method {
+func handleConsoleAPICall(c consoleAPICall, events chan Event, errors chan interface{}) bool {
+	args := resolveArgs(c)
+	switch method := c.Type; method {
 	case "clear":
 		if len(args) != 0 {
 			code, ok := args[0].(float64)
@@ -172,24 +195,22 @@ func handleConsoleApiCall(params interface{}, events chan Event, errors chan int
 	return false
 }
 
-func resolveArgs(args []interface{}) []interface{} {
-	for i, arg := range args {
-		arg := arg.(map[string]interface{})
-		switch t, st := arg["type"], arg["subtype"]; {
+func resolveArgs(c consoleAPICall) []interface{} {
+	args := make([]interface{}, len(c.Args))
+	for i, arg := range c.Args {
+		switch t, st := arg.Type, arg.Subtype; {
 		case t == "string", t == "number", t == "boolean", st == "null", t == "undefined":
-			args[i] = arg["value"]
+			args[i] = arg.Value
 		case t == "function", st == "regexp":
-			args[i] = arg["description"]
+			args[i] = arg.Description
 		default:
-			properties := arg["preview"].(map[string]interface{})["properties"].([]interface{})
+			properties := arg.Preview.Properties
 			kvs := make([]string, len(properties))
-			for i := range properties {
-				m := properties[i].(map[string]interface{})
-				k, v := m["name"].(string), m["value"].(string)
+			for i, p := range properties {
 				if st == "array" {
-					kvs[i] = v
+					kvs[i] = p.Value
 				} else {
-					kvs[i] = k + ": " + v
+					kvs[i] = p.Name + ": " + p.Value
 				}
 			}
 			if st == "array" {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -166,7 +167,11 @@ func (p *Page) Disconnect() error {
 	return p.socket.Close()
 }
 
-func (p *Page) Subscribe(domain, event string, f func(interface{})) error {
+func (p *Page) Subscribe(domain, event string, f interface{}) error {
+	fv := reflect.ValueOf(f)
+	if t := fv.Type(); t.NumIn() != 1 || t.NumOut() != 0 {
+		panic(fmt.Errorf("subscribe func must have type func(T)"))
+	}
 	if !p.domains[domain] {
 		p.domains[domain] = true
 		if err := p.Execute(domain+".enable", nil, nil); err != nil {
@@ -179,13 +184,13 @@ func (p *Page) Subscribe(domain, event string, f func(interface{})) error {
 	p.Unlock()
 	go func() {
 		for r := range c {
-			var x interface{}
+			x := reflect.New(fv.Type().In(0))
 			if r.err != nil {
 				panic(fmt.Errorf("%s.%s: %w", domain, event, r.err))
-			} else if err := json.Unmarshal(r.json, &x); err != nil {
+			} else if err := json.Unmarshal(r.json, x.Interface()); err != nil {
 				panic(fmt.Errorf("%s.%s: %w", domain, event, err))
 			} else {
-				f(x)
+				fv.Call([]reflect.Value{x.Elem()})
 			}
 		}
 	}()
