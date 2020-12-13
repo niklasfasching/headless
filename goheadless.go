@@ -220,6 +220,18 @@ func (p *Page) Await(domain, event string) (chan interface{}, error) {
 	return c, err
 }
 
+func (p *Page) Open(url string) error {
+	loaded, err := p.Await("Page", "frameStoppedLoading")
+	if err != nil {
+		return err
+	}
+	if err := p.Execute("Page.navigate", map[string]string{"url": url}, nil); err != nil {
+		return err
+	}
+	<-loaded
+	return nil
+}
+
 func (p *Page) Execute(method string, params, result interface{}) error {
 	if p.err != nil {
 		return p.err

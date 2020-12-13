@@ -119,39 +119,17 @@ func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, erro
 
 	c, started := make(chan interface{}), false
 	p.Subscribe("Runtime", "consoleAPICalled", func(params interface{}) {
-		m := params.(map[string]interface{})
-		args := resolveArgs(m["args"].([]interface{}))
-		switch method := m["type"].(string); method {
-		case "clear":
-			if len(args) != 0 {
-				code, ok := args[0].(float64)
-				if !ok {
-					c <- fmt.Errorf("bad code: %v", args[0])
-				} else if code == -1 {
-					started = true
-				} else {
-					time.Sleep(10 * time.Millisecond)
-					c <- int(code)
-				}
-			}
-		default:
-			out <- Event{method, args}
-		}
+		started = started || handleConsoleApiCall(params, out, c)
 	})
-
 	p.Subscribe("Runtime", "exceptionThrown", func(v interface{}) {
 		e := v.(map[string]interface{})["exceptionDetails"].(map[string]interface{})["exception"].(map[string]interface{})
 		c <- fmt.Errorf("unexpected error: %v", e["description"])
 	})
+
 	go func() {
-		loaded, err := p.Await("Page", "frameStoppedLoading")
-		if err != nil {
+		if err := p.Open(url); err != nil {
 			c <- err
 		}
-		if err := p.Execute("Page.navigate", map[string]string{"url": url}, nil); err != nil {
-			c <- err
-		}
-		<-loaded
 		if !started {
 			<-time.After(1 * time.Second)
 			c <- fmt.Errorf("timeout: script did not call start() after 1s")
@@ -170,6 +148,28 @@ func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, erro
 	case <-ctx.Done():
 		return -1, nil
 	}
+}
+
+func handleConsoleApiCall(params interface{}, events chan Event, errors chan interface{}) bool {
+	m := params.(map[string]interface{})
+	args := resolveArgs(m["args"].([]interface{}))
+	switch method := m["type"].(string); method {
+	case "clear":
+		if len(args) != 0 {
+			code, ok := args[0].(float64)
+			if !ok {
+				errors <- fmt.Errorf("bad code: %v", args[0])
+			} else if code == -1 {
+				return true
+			} else {
+				time.Sleep(10 * time.Millisecond)
+				errors <- int(code)
+			}
+		}
+	default:
+		events <- Event{method, args}
+	}
+	return false
 }
 
 func resolveArgs(args []interface{}) []interface{} {
