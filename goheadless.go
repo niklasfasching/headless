@@ -30,6 +30,7 @@ type Page struct {
 	commandID int
 	commands  map[int]chan *response
 	events    map[string]chan *response
+	domains   map[string]bool
 	sync.RWMutex
 }
 
@@ -99,6 +100,7 @@ func (p *Page) Connect() (err error) {
 	p.socket, err = websocket.Dial(fmt.Sprintf("ws://%s/devtools/page/%s", hostport, p.ID), "", hostport)
 	p.commands = map[int]chan *response{}
 	p.events = map[string]chan *response{}
+	p.domains = map[string]bool{}
 	go p.receiveLoop()
 	return err
 }
@@ -165,8 +167,11 @@ func (p *Page) Disconnect() error {
 }
 
 func (p *Page) Subscribe(domain, event string, f func(interface{})) error {
-	if err := p.Execute(domain+".enable", nil, nil); err != nil {
-		return err
+	if !p.domains[domain] {
+		p.domains[domain] = true
+		if err := p.Execute(domain+".enable", nil, nil); err != nil {
+			return err
+		}
 	}
 	c := make(chan *response)
 	p.Lock()
@@ -190,16 +195,15 @@ func (p *Page) Subscribe(domain, event string, f func(interface{})) error {
 func (p *Page) Unsubscribe(domain, event string) error {
 	p.Lock()
 	delete(p.events, domain+"."+event)
-	p.Unlock()
-	unsubscribe := true
-	p.RLock()
+	hasSubscriptions := false
 	for k := range p.events {
 		if strings.HasPrefix(k, domain) {
-			unsubscribe = false
+			hasSubscriptions = true
 		}
 	}
-	p.RUnlock()
-	if unsubscribe {
+	p.Unlock()
+	if !hasSubscriptions {
+		delete(p.domains, domain)
 		if err := p.Execute(domain+".disable", nil, nil); err != nil {
 			return err
 		}
@@ -219,6 +223,9 @@ func (p *Page) Await(domain, event string) (chan interface{}, error) {
 func (p *Page) Execute(method string, params, result interface{}) error {
 	if p.err != nil {
 		return p.err
+	}
+	if strings.HasSuffix(method, ".enable") {
+		p.domains[strings.TrimSuffix(method, ".enable")] = true
 	}
 	p.commandID += 1
 	id := p.commandID
