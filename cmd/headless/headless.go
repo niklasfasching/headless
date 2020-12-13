@@ -21,6 +21,12 @@ func main() {
 	if strings.HasPrefix(*address, ":") {
 		*address = "0.0.0.0" + *address
 	}
+	r := &goheadless.Runner{
+		Address: *address,
+		Code:    *code,
+		Files:   flag.Args(),
+		Args:    strings.Fields(*windowArgs),
+	}
 	if *run {
 		out, done := make(chan goheadless.Event), make(chan struct{})
 		go func() {
@@ -38,7 +44,7 @@ func main() {
 			close(done)
 		}()
 		ctx := context.Background()
-		exitCode, err := goheadless.ServeAndRun(ctx, out, *address, *code, flag.Args(), strings.Fields(*windowArgs))
+		exitCode, err := r.ServeAndRun(ctx, out)
 		<-done
 		if err != nil {
 			log.Fatal(err)
@@ -47,7 +53,7 @@ func main() {
 		}
 	} else {
 		log.Println("http://" + *address)
-		goheadless.Serve(*address, *code, flag.Args(), strings.Fields(*windowArgs))
+		r.Serve()
 		select {}
 	}
 }

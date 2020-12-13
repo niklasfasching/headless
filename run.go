@@ -54,19 +54,30 @@ type Event struct {
 	Args   []interface{}
 }
 
-func Serve(address, code string, files, args []string) *http.Server {
-	servePath := "/"
-	if parts := strings.SplitN(address, "/", 2); len(parts) == 2 {
+type Runner struct {
+	Address string
+	Code    string
+	Files   []string
+	Args    []string
+
+	Server *http.Server
+}
+
+func (r *Runner) Serve() {
+	argsBytes, _ := json.Marshal(r.Args)
+	address, servePath, code := r.Address, "/", r.Code
+	if parts := strings.SplitN(r.Address, "/", 2); len(parts) == 2 {
 		address, servePath = parts[0], "/"+parts[1]
 	}
-	for i, f := range files {
+	imports := make([]string, len(r.Files))
+	for i, f := range r.Files {
 		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
 			f = "./" + f
 		}
-		files[i] = fmt.Sprintf(`import "%s";`, f)
+		imports[i] = fmt.Sprintf(`import "%s";`, f)
 	}
 	fs := http.FileServer(http.Dir("./"))
-	s := &http.Server{Addr: address, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Server = &http.Server{Addr: address, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			w.Header().Set("Content-Type", "application/json")
 			is, _ := ioutil.ReadDir(path.Join("./", r.URL.Path))
@@ -76,27 +87,25 @@ func Serve(address, code string, files, args []string) *http.Server {
 			}
 			json.NewEncoder(w).Encode(files)
 		} else if r.URL.Path == servePath {
-			argsBytes, _ := json.Marshal(args)
-			fmt.Fprintf(w, htmlTemplate, string(argsBytes), code, strings.Join(files, "\n"))
+			fmt.Fprintf(w, htmlTemplate, string(argsBytes), code, strings.Join(imports, "\n"))
 		} else {
 			fs.ServeHTTP(w, r)
 		}
 	})}
 	go func() {
-		if err := s.ListenAndServe(); err != http.ErrServerClosed {
+		if err := r.Server.ListenAndServe(); err != http.ErrServerClosed {
 			panic(err)
 		}
 	}()
-	return s
 }
 
-func ServeAndRun(ctx context.Context, out chan Event, address, code string, files, args []string) (int, error) {
-	s := Serve(address, code, files, args)
-	defer s.Close()
-	return Run(ctx, out, "http://"+address)
+func (r *Runner) ServeAndRun(ctx context.Context, out chan Event) (int, error) {
+	r.Serve()
+	defer r.Server.Close()
+	return r.Run(ctx, out, "http://"+r.Address)
 }
 
-func Run(ctx context.Context, out chan Event, url string) (int, error) {
+func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, error) {
 	b := &Browser{Port: GetFreePort()}
 	defer func() { close(out) }()
 	if err := b.Start(); err != nil {
