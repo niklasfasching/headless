@@ -228,17 +228,15 @@ func (p *Page) Execute(method string, params, result interface{}) error {
 		p.domains[strings.TrimSuffix(method, ".enable")] = true
 	}
 	p.commandID += 1
-	id := p.commandID
+	c, id := make(chan *response), p.commandID
 	p.Lock()
-	p.commands[id] = make(chan *response)
+	p.commands[id] = c
 	p.Unlock()
 	msg := map[string]interface{}{"id": id, "method": method, "params": params}
 	if err := websocket.JSON.Send(p.socket, msg); err != nil {
 		return err
 	}
-	p.RLock()
-	r := <-p.commands[id]
-	p.RUnlock()
+	r := <-c
 	p.Lock()
 	delete(p.commands, id)
 	p.Unlock()
