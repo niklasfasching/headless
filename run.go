@@ -88,18 +88,11 @@ type consoleAPICall struct {
 }
 
 func (r *Runner) Serve() {
-	argsBytes, _ := json.Marshal(r.Args)
-	address, servePath, code := r.Address, "/", r.Code
+	address, servePath := r.Address, "/"
 	if parts := strings.SplitN(r.Address, "/", 2); len(parts) == 2 {
 		address, servePath = parts[0], "/"+parts[1]
 	}
-	imports := make([]string, len(r.Files))
-	for i, f := range r.Files {
-		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
-			f = "./" + f
-		}
-		imports[i] = fmt.Sprintf(`import "%s";`, f)
-	}
+	html := []byte(formatResponse(r.Code, r.Files, r.Args))
 	fs := http.FileServer(http.Dir("./"))
 	r.Server = &http.Server{Addr: address, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
@@ -111,7 +104,7 @@ func (r *Runner) Serve() {
 			}
 			json.NewEncoder(w).Encode(files)
 		} else if r.URL.Path == servePath {
-			fmt.Fprintf(w, htmlTemplate, string(argsBytes), code, strings.Join(imports, "\n"))
+			w.Write(html)
 		} else {
 			fs.ServeHTTP(w, r)
 		}
@@ -221,6 +214,18 @@ func resolveArgs(c consoleAPICall) []interface{} {
 		}
 	}
 	return args
+}
+
+func formatResponse(code string, files, args []string) string {
+	argsBytes, _ := json.Marshal(args)
+	imports := make([]string, len(files))
+	for i, f := range files {
+		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
+			f = "./" + f
+		}
+		imports[i] = fmt.Sprintf(`import "%s";`, f)
+	}
+	return fmt.Sprintf(htmlTemplate, string(argsBytes), code, strings.Join(imports, "\n"))
 }
 
 func GetFreePort() string {
