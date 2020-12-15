@@ -1,11 +1,13 @@
 package goheadless
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -23,6 +25,12 @@ type exceptionThrown struct {
 		Exception    struct {
 			Description string
 		}
+	}
+}
+
+type pausedRequest struct {
+	RequestId string
+	Request   struct {
 	}
 }
 
@@ -82,6 +90,60 @@ func Run(url string) (chan Event, func() (int, error)) {
 			}
 		}
 	}()
+	if err := p.Open(url); err != nil {
+		close(events)
+		return events, func() (int, error) { return -1, err }
+	}
+	return events, func() (int, error) {
+		stop()
+		switch e := (<-exit).(type) {
+		case int:
+			return e, nil
+		default:
+			return -1, e.(error)
+		}
+	}
+}
+
+func RunOn(domain, html string) (chan Event, func() (int, error)) {
+	url := fmt.Sprintf("http://%s/goheadless.html", domain)
+	events, exit := make(chan Event), make(chan interface{})
+	if !regexp.MustCompile(`^\w+\.\w+$`).MatchString(domain) {
+		close(events)
+		return events, func() (int, error) { return -1, fmt.Errorf("invalid domain: %s", domain) }
+	}
+	p, c, stop, err := OpenPage()
+	if err != nil {
+		close(events)
+		return events, func() (int, error) { return -1, err }
+	}
+	go func() {
+		for x := range c {
+			switch x := x.(type) {
+			case Event:
+				events <- x
+			case error:
+				events <- Event{"exception", []interface{}{x.Error()}}
+			default:
+				close(events)
+				exit <- x
+			}
+		}
+	}()
+	params := map[string]interface{}{"patterns": []interface{}{map[string]string{"urlPattern": url}}}
+	if err := p.Execute("Fetch.enable", params, nil); err != nil {
+		close(events)
+		return events, func() (int, error) { return -1, err }
+	}
+	p.Subscribe("Fetch", "requestPaused", func(pr pausedRequest) {
+		if err := p.Execute("Fetch.fulfillRequest", map[string]interface{}{
+			"requestId":    pr.RequestId,
+			"responseCode": 200,
+			"body":         base64.StdEncoding.EncodeToString([]byte(html)),
+		}, nil); err != nil {
+			exit <- err
+		}
+	})
 	if err := p.Open(url); err != nil {
 		close(events)
 		return events, func() (int, error) { return -1, err }

@@ -12,14 +12,21 @@ import (
 var address = flag.String("l", "localhost:"+goheadless.GetFreePort(), "listen address")
 var windowArgs = flag.String("a", "", "window.args - split via strings.Fields")
 var run = flag.Bool("r", false, "run served script")
+var runOnDomain = flag.String("d", "", "run script served on domain")
 var code = flag.String("c", "", "code snippet to run")
 
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
 	html := goheadless.HTML(*code, flag.Args(), strings.Fields(*windowArgs))
-	if *run {
-		events, f := goheadless.ServeAndRun(*address, html)
+	if *run || *runOnDomain != "" {
+		var events chan goheadless.Event
+		var f func() (int, error)
+		if *runOnDomain != "" {
+			events, f = goheadless.RunOn(*runOnDomain, html)
+		} else {
+			events, f = goheadless.ServeAndRun(*address, html)
+		}
 		for event := range events {
 			if event.Method == "info" {
 				log.Println(goheadless.Colorize(event))
