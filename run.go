@@ -1,7 +1,6 @@
 package goheadless
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -50,15 +49,6 @@ type Event struct {
 	Args   []interface{}
 }
 
-type Runner struct {
-	Address string
-	Code    string
-	Files   []string
-	Args    []string
-
-	Server *http.Server
-}
-
 type exceptionThrown struct {
 	ExceptionDetails struct {
 		LineNumber   int
@@ -86,14 +76,13 @@ type consoleAPICall struct {
 	Type string
 }
 
-func (r *Runner) Serve() {
-	address, servePath := r.Address, "/"
-	if parts := strings.SplitN(r.Address, "/", 2); len(parts) == 2 {
+func Serve(address, html string) *http.Server {
+	servePath := "/"
+	if parts := strings.SplitN(address, "/", 2); len(parts) == 2 {
 		address, servePath = parts[0], "/"+parts[1]
 	}
-	html := []byte(formatResponse(r.Code, r.Files, r.Args))
 	fs := http.FileServer(http.Dir("./"))
-	r.Server = &http.Server{Addr: address, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := &http.Server{Addr: address, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			w.Header().Set("Content-Type", "application/json")
 			is, _ := ioutil.ReadDir(path.Join("./", r.URL.Path))
@@ -103,81 +92,91 @@ func (r *Runner) Serve() {
 			}
 			json.NewEncoder(w).Encode(files)
 		} else if r.URL.Path == servePath {
-			w.Write(html)
+			w.Write([]byte(html))
 		} else {
 			fs.ServeHTTP(w, r)
 		}
 	})}
 	go func() {
-		if err := r.Server.ListenAndServe(); err != http.ErrServerClosed {
+		if err := s.ListenAndServe(); err != http.ErrServerClosed {
 			panic(err)
 		}
 	}()
+	return s
 }
 
-func (r *Runner) ServeAndRun(ctx context.Context, out chan Event) (int, error) {
-	r.Serve()
-	defer r.Server.Close()
-	return r.Run(ctx, out, "http://"+r.Address)
+func ServeAndRun(address, html string) (chan Event, func() (int, error)) {
+	s := Serve(address, html)
+	defer s.Close()
+	return Run("http://" + address)
 }
 
-func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, error) {
+func OpenPage() (*Page, chan interface{}, func(), error) {
 	b := &Browser{Port: GetFreePort()}
-	defer func() { close(out) }()
 	if err := b.Start(); err != nil {
-		return -1, err
+		return nil, nil, nil, err
 	}
-	defer b.Stop()
 	p, err := b.OpenPage()
 	if err != nil {
-		return -1, err
+		return nil, nil, nil, err
 	}
-
 	c := make(chan interface{})
-	p.Subscribe("Runtime", "consoleAPICalled", func(params consoleAPICall) {
-		handleConsoleAPICall(params, out, c)
+	p.Subscribe("Runtime", "consoleAPICalled", func(call consoleAPICall) {
+		args := resolveArgs(call)
+		switch method := call.Type; method {
+		case "clear":
+			if len(args) == 1 {
+				if code, ok := args[0].(float64); !ok {
+					c <- fmt.Errorf("bad code: %v", args[0])
+				} else {
+					time.Sleep(10 * time.Millisecond)
+					c <- int(code)
+				}
+			}
+		default:
+			c <- Event{method, args}
+		}
 	})
-
 	p.Subscribe("Runtime", "exceptionThrown", func(e exceptionThrown) {
 		c <- fmt.Errorf("%s\n    at %s:%d:%d", e.ExceptionDetails.Exception.Description,
 			e.ExceptionDetails.Url, e.ExceptionDetails.LineNumber, e.ExceptionDetails.ColumnNumber)
 	})
-
-	go func() {
-		if err := p.Open(url); err != nil {
-			c <- err
-		}
-		<-time.After(60 * time.Second)
-		c <- fmt.Errorf("timeout: script did not call exit() after 60s")
-	}()
-	select {
-	case err := <-c:
-		switch err := err.(type) {
-		case int:
-			return err, nil
-		default:
-			return -1, err.(error)
-		}
-	case <-ctx.Done():
-		return -1, nil
-	}
+	return p, c, func() {
+		b.Stop()
+		close(c)
+	}, nil
 }
 
-func handleConsoleAPICall(c consoleAPICall, events chan Event, errors chan interface{}) {
-	args := resolveArgs(c)
-	switch method := c.Type; method {
-	case "clear":
-		if len(args) != 0 {
-			code, ok := args[0].(float64)
-			if !ok {
-				errors <- fmt.Errorf("bad code: %v", args[0])
-			} else {
-				time.Sleep(10 * time.Millisecond)
-				errors <- int(code)
+func Run(url string) (chan Event, func() (int, error)) {
+	events, exit := make(chan Event), make(chan interface{})
+	p, c, stop, err := OpenPage()
+	if err != nil {
+		close(events)
+		return events, func() (int, error) { return -1, err }
+	}
+	go func() {
+		for x := range c {
+			switch x := x.(type) {
+			case Event:
+				events <- x
+			default:
+				close(events)
+				exit <- x
 			}
 		}
-	default:
-		events <- Event{method, args}
+	}()
+	if err := p.Open(url); err != nil {
+		close(events)
+		return events, func() (int, error) { return -1, err }
+	}
+	return events, func() (int, error) {
+		stop()
+		switch e := (<-exit).(type) {
+		case int:
+			return e, nil
+		default:
+			return -1, e.(error)
+		}
 	}
 }
 
@@ -209,7 +208,7 @@ func resolveArgs(c consoleAPICall) []interface{} {
 	return args
 }
 
-func formatResponse(code string, files, args []string) string {
+func HTML(code string, files, args []string) string {
 	argsBytes, _ := json.Marshal(args)
 	imports := make([]string, len(files))
 	for i, f := range files {

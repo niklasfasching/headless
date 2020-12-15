@@ -1,7 +1,6 @@
 package goheadless
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -61,22 +60,17 @@ var testCases = []testCase{
 func TestRun(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := &Runner{
-				Address: "localhost:9001",
-				Code:    tc.code,
-				Files:   tc.files,
-				Args:    tc.args,
+			c, f := ServeAndRun("localhost:9001", HTML(tc.code, tc.files, tc.args))
+			events := []Event{}
+			for event := range c {
+				events = append(events, event)
 			}
-			out, events := make(chan Event, 1000), []Event{}
-			exitCode, err := r.ServeAndRun(context.Background(), out)
+			exitCode, err := f()
 			if exitCode != tc.exitCode {
 				t.Errorf("exitCode differs: %d !== %d", exitCode, tc.exitCode)
 			}
 			if fmt.Sprintf("%v", err) != fmt.Sprintf("%v", tc.error) {
 				t.Errorf("error  differs: %#v !== %#v", err, tc.error)
-			}
-			for event := range out {
-				events = append(events, event)
 			}
 			expectedEventsJSON, _ := json.Marshal(tc.events)
 			actualEventsJSON, _ := json.Marshal(events)
