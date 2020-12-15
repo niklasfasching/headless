@@ -56,6 +56,9 @@ func Serve(address, html string) *http.Server {
 }
 
 func ServeAndRun(address, html string) (chan Event, func() (int, error)) {
+	if strings.HasPrefix(address, ":") {
+		address = "localhost" + address
+	}
 	s := Serve(address, html)
 	defer s.Close()
 	return Run("http://" + address)

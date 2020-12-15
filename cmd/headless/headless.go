@@ -17,9 +17,6 @@ var code = flag.String("c", "", "code snippet to run")
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
-	if strings.HasPrefix(*address, ":") {
-		*address = "0.0.0.0" + *address
-	}
 	html := goheadless.HTML(*code, flag.Args(), strings.Fields(*windowArgs))
 	if *run {
 		events, f := goheadless.ServeAndRun(*address, html)
