@@ -46,17 +46,15 @@ var testCases = []testCase{
 		files:    []string{"./testdata/doesNotExist.mjs"},
 		exitCode: -1,
 		events:   []Event{},
-		error:    fmt.Errorf("timeout: script did not call start() after 1s"),
+		error:    fmt.Errorf("Error: bad imports\n    at http://localhost:9001/:27:36\n    at http://localhost:9001/:26:35"),
 	},
 
 	{
-		name: "log uncaught error",
-		code: "invalid code",
-		events: []Event{
-			{Method: "log", Args: []interface{}{"SyntaxError: Unexpected identifier"}},
-			{Method: "log", Args: []interface{}{"    at http://localhost:9001/:30:13"}},
-		},
-		exitCode: 0,
+		name:     "log uncaught error",
+		code:     "invalid code",
+		events:   []Event{},
+		error:    fmt.Errorf("SyntaxError: Unexpected identifier\n    at http://localhost:9001/:27:12"),
+		exitCode: -1,
 	},
 }
 
@@ -74,7 +72,7 @@ func TestRun(t *testing.T) {
 			if exitCode != tc.exitCode {
 				t.Errorf("exitCode differs: %d !== %d", exitCode, tc.exitCode)
 			}
-			if err != tc.error && err.Error() != tc.error.Error() {
+			if fmt.Sprintf("%v", err) != fmt.Sprintf("%v", tc.error) {
 				t.Errorf("error  differs: %#v !== %#v", err, tc.error)
 			}
 			for event := range out {

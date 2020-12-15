@@ -25,13 +25,6 @@ var htmlTemplate = `
     window.isHeadless = navigator.webdriver;
     window.args = %s;
     window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit:', code);
-    window.onerror = (msg, src, line, col, err) => {
-      console.log(err.stack);
-      console.log("    at " + src + ":" + line + ":" + col);
-      window.close();
-      return true;
-    };
-
     window.openIframe = (src) => {
       return new Promise((resolve, reject) => {
         const iframe = document.createElement("iframe");
@@ -43,8 +36,11 @@ var htmlTemplate = `
     </script>
     <script type=module>
     %s
+    window.hasImported = true;
+    </script>
+    <script type=module>
+    if (!window.hasImported) throw new Error('bad imports');
     %s
-    if (isHeadless) console.clear(-1); // notify start. import errors stop script from running at all
     </script>
   </head>
 </html>`
@@ -65,7 +61,10 @@ type Runner struct {
 
 type exceptionThrown struct {
 	ExceptionDetails struct {
-		Exception struct {
+		LineNumber   int
+		ColumnNumber int
+		Url          string
+		Exception    struct {
 			Description string
 		}
 	}
@@ -134,22 +133,19 @@ func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, erro
 		return -1, err
 	}
 
-	c, started := make(chan interface{}), false
+	c := make(chan interface{})
 	p.Subscribe("Runtime", "consoleAPICalled", func(params consoleAPICall) {
-		started = started || handleConsoleAPICall(params, out, c)
+		handleConsoleAPICall(params, out, c)
 	})
 
 	p.Subscribe("Runtime", "exceptionThrown", func(e exceptionThrown) {
-		c <- fmt.Errorf("unexpected error: %v", e.ExceptionDetails.Exception.Description)
+		c <- fmt.Errorf("%s\n    at %s:%d:%d", e.ExceptionDetails.Exception.Description,
+			e.ExceptionDetails.Url, e.ExceptionDetails.LineNumber, e.ExceptionDetails.ColumnNumber)
 	})
 
 	go func() {
 		if err := p.Open(url); err != nil {
 			c <- err
-		}
-		if !started {
-			<-time.After(1 * time.Second)
-			c <- fmt.Errorf("timeout: script did not call start() after 1s")
 		}
 		<-time.After(60 * time.Second)
 		c <- fmt.Errorf("timeout: script did not call exit() after 60s")
@@ -167,7 +163,7 @@ func (r *Runner) Run(ctx context.Context, out chan Event, url string) (int, erro
 	}
 }
 
-func handleConsoleAPICall(c consoleAPICall, events chan Event, errors chan interface{}) bool {
+func handleConsoleAPICall(c consoleAPICall, events chan Event, errors chan interface{}) {
 	args := resolveArgs(c)
 	switch method := c.Type; method {
 	case "clear":
@@ -175,8 +171,6 @@ func handleConsoleAPICall(c consoleAPICall, events chan Event, errors chan inter
 			code, ok := args[0].(float64)
 			if !ok {
 				errors <- fmt.Errorf("bad code: %v", args[0])
-			} else if code == -1 {
-				return true
 			} else {
 				time.Sleep(10 * time.Millisecond)
 				errors <- int(code)
@@ -185,7 +179,6 @@ func handleConsoleAPICall(c consoleAPICall, events chan Event, errors chan inter
 	default:
 		events <- Event{method, args}
 	}
-	return false
 }
 
 func resolveArgs(c consoleAPICall) []interface{} {
@@ -225,7 +218,7 @@ func formatResponse(code string, files, args []string) string {
 		}
 		imports[i] = fmt.Sprintf(`import "%s";`, f)
 	}
-	return fmt.Sprintf(htmlTemplate, string(argsBytes), code, strings.Join(imports, "\n"))
+	return fmt.Sprintf(htmlTemplate, string(argsBytes), strings.Join(imports, "\n"), code)
 }
 
 func GetFreePort() string {
