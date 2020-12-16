@@ -190,7 +190,7 @@ func (p *Page) Subscribe(domain, event string, f interface{}) error {
 			} else if err := json.Unmarshal(r.json, x.Interface()); err != nil {
 				panic(fmt.Errorf("%s.%s: %w", domain, event, err))
 			} else {
-				fv.Call([]reflect.Value{x.Elem()})
+				go fv.Call([]reflect.Value{x.Elem()})
 			}
 		}
 	}()
@@ -199,6 +199,7 @@ func (p *Page) Subscribe(domain, event string, f interface{}) error {
 
 func (p *Page) Unsubscribe(domain, event string) error {
 	p.Lock()
+	close(p.events[domain+"."+event])
 	delete(p.events, domain+"."+event)
 	hasSubscriptions := false
 	for k := range p.events {
