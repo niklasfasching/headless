@@ -53,7 +53,12 @@ func (b *Browser) Stop() (*os.ProcessState, error) {
 }
 
 func (b *Browser) Start() error {
-	args := []string{"--headless", "--disable-gpu", "--hide-scrollbars"}
+	args := []string{
+		"--headless",
+		"--temp-profile",
+		"--hide-scrollbars",
+		"--autoplay-policy=no-user-gesture-required",
+	}
 	if b.Executable == "" {
 		if executable := os.Getenv("GOHEADLESS_EXECUTABLE"); executable != "" {
 			b.Executable = executable
