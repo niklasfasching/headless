@@ -1,106 +1,75 @@
 package goheadless
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net"
-	"strconv"
+	"os"
+	"regexp"
 	"strings"
 )
 
-var htmlTemplate = `
-<!doctype html>
-<html lang=en>
-  <head>
-    <meta charset=utf-8>
-    <style>
-      html, body, iframe { height: 100%%; width: 100%%; border: none; margin: 0; display: block; }
-    </style>
-    <script type=module>
-    window.isHeadless = navigator.webdriver;
-    window.args = %s;
-    window.close = (code = 0) => isHeadless ? console.clear(code) : console.log('exit:', code);
-    window.openIframe = (src) => {
-      return new Promise((resolve, reject) => {
-        const iframe = document.createElement("iframe");
-        const onerror = reject;
-        const onload = () => resolve(iframe);
-        document.body.appendChild(Object.assign(iframe, {onload, onerror, src}));
-      });
-    };
-    </script>
-    <script type=module>
-    %s
-    window.hasImported = true;
-    </script>
-    <script type=module>
-    if (!window.hasImported) throw new Error('bad imports');
-    %s
-    </script>
-  </head>
-</html>`
+//go:embed etc/run.html
+var runHTML string
 
-type consoleAPICall struct {
-	Args []struct {
-		Type        string
-		Subtype     string
-		Description string
-		Preview     struct {
-			Properties []struct {
-				Name  string
-				Value string
-			}
-		}
-		Value interface{}
-	}
-	Type string
+var colorRegexp = regexp.MustCompile(`\bcolor\s*:\s*(\w+)\b`)
+
+var Colors = map[string]int{
+	"none":   0,
+	"red":    31,
+	"green":  32,
+	"yellow": 33,
+	"blue":   34,
+	"purple": 35,
+	"cyan":   36,
+	"grey":   37,
 }
 
-func resolveConsoleArgs(c consoleAPICall) []interface{} {
-	args := make([]interface{}, len(c.Args))
-	for i, arg := range c.Args {
-		switch t, st := arg.Type, arg.Subtype; {
-		case t == "string", t == "number", t == "boolean", st == "null", t == "undefined":
-			args[i] = arg.Value
-		case t == "function", st == "regexp":
-			args[i] = arg.Description
-		default:
-			properties := arg.Preview.Properties
-			kvs := make([]string, len(properties))
-			for i, p := range properties {
-				if st == "array" {
-					kvs[i] = p.Value
-				} else {
-					kvs[i] = p.Name + ": " + p.Value
-				}
-			}
-			if st == "array" {
-				args[i] = "[" + strings.Join(kvs, ",") + "]"
-			} else {
-				args[i] = "{" + strings.Join(kvs, ",") + "}"
-			}
-		}
+func Colorize(m Message) string {
+	if len(m.Args) == 0 {
+		return ""
 	}
-	return args
+	raw, _ := m.Args[0].(string)
+	if fi, _ := os.Stdout.Stat(); (fi.Mode() & os.ModeCharDevice) == 0 {
+		return strings.ReplaceAll(raw, "%c", "")
+	}
+	parts := strings.Split(raw, "%c")
+	out := parts[0]
+	for i, part := range parts[1:] {
+		if len(m.Args) > i+1 {
+			colorString, _ := m.Args[i+1].(string)
+			if m := colorRegexp.FindStringSubmatch(colorString); m != nil {
+				out += fmt.Sprintf("\033[%dm", Colors[m[1]])
+			}
+		} else {
+			out += fmt.Sprintf("\033[%dm", Colors["none"])
+		}
+		out += part
+	}
+	if len(parts) > 1 {
+		out += fmt.Sprintf("\033[%dm", Colors["none"])
+	}
+	return out
 }
 
-func HTML(code string, files, args []string) string {
-	argsBytes, _ := json.Marshal(args)
-	imports := make([]string, len(files))
-	for i, f := range files {
-		if !strings.HasPrefix(f, "./") && !strings.HasPrefix(f, "/") {
-			f = "./" + f
-		}
-		imports[i] = fmt.Sprintf(`import "%s";`, f)
-	}
-	return fmt.Sprintf(htmlTemplate, string(argsBytes), strings.Join(imports, "\n"), code)
-}
-
-func GetFreePort() string {
+func GetFreePort() int {
 	l, err := net.Listen("tcp", ":0")
 	if err != nil {
 		panic(err)
 	}
 	defer l.Close()
-	return strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func HTML(code string, files, args []string) string {
+	argsBytes, _ := json.Marshal(args)
+	html := fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
+	for _, f := range files {
+		html += fmt.Sprintf(`<script type="module" src="%s" onerror="throw new Error('failed to import %s')"></script>`, f, f) + "\n"
+	}
+	if code != "" {
+		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
+	}
+	return strings.ReplaceAll(runHTML, "</head>", html+"</head>")
 }

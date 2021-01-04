@@ -1,51 +1,48 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/niklasfasching/goheadless"
 )
 
-var address = flag.String("l", "localhost:"+goheadless.GetFreePort(), "listen address")
-var windowArgs = flag.String("a", "", "window.args - split via strings.Fields")
-var run = flag.Bool("r", false, "run served script")
-var runOnDomain = flag.String("d", "", "run script served on domain")
-var code = flag.String("c", "", "code snippet to run")
+var code = flag.String("c", "", "code to run after files have been imported")
+var args = flag.String("a", "", "window.args - split via strings.Fields")
 
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
-	html := goheadless.HTML(*code, flag.Args(), strings.Fields(*windowArgs))
-	if *run || *runOnDomain != "" {
-		var events chan goheadless.Event
-		var f func() (int, error)
-		if *runOnDomain != "" {
-			events, f = goheadless.RunOn(*runOnDomain, html)
-		} else {
-			events, f = goheadless.ServeAndRun(*address, html)
-		}
-		for event := range events {
-			if event.Method == "info" {
-				log.Println(goheadless.Colorize(event))
-			} else if l := len(event.Args); l == 0 {
-				continue
-			} else if arg1, ok := event.Args[0].(string); ok && l == 1 {
-				log.Println(arg1)
-			} else {
-				log.Printf("%s %v", event.Method, event.Args)
+	h := &goheadless.Runner{}
+	if err := h.Start(); err != nil {
+		log.Fatal(err)
+	}
+	defer h.Stop()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		h.Stop()
+		os.Exit(1)
+	}()
+	html := goheadless.HTML(*code, flag.Args(), strings.Fields(*args))
+	messages := h.Run(context.Background(), html)
+	for m := range messages {
+		if m.Method == "clear" && len(m.Args) == 1 {
+			exitCode, ok := m.Args[0].(float64)
+			if !ok {
+				os.Exit(-1)
 			}
-		}
-		if exitCode, err := f(); err != nil {
-			log.Fatal(err)
+			os.Exit(int(exitCode))
+		} else if m.Method == "info" {
+			log.Println(goheadless.Colorize(m))
 		} else {
-			os.Exit(exitCode)
+			log.Println(append([]interface{}{m.Method}, m.Args...)...)
 		}
-	} else {
-		log.Println("http://" + *address)
-		goheadless.Serve(*address, html)
-		select {}
 	}
 }

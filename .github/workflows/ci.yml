@@ -10,6 +10,9 @@ jobs:
     env:
       GOHEADLESS_EXECUTABLE: google-chrome
     steps:
+    - name: go
+      run: |
+        sudo snap install go --edge --classic
     - name: git
       run: |
         git clone --depth 1 "https://x-access-token:${{secrets.GITHUB_TOKEN}}@github.com/${GITHUB_REPOSITORY}" .
