@@ -18,5 +18,4 @@ jobs:
         git log -1 --format="%H"
     - name: test
       run: |
-        go mod init github.com/${GITHUB_REPOSITORY}
-        make install test
+        GOROOT=/snap/go/current make install test
