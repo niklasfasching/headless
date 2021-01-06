@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"strconv"
 	"strings"
@@ -78,6 +79,15 @@ func (b *Browser) Start(url string) error {
 	if err := b.cmd.Start(); err != nil {
 		return err
 	}
+
+	s := make(chan os.Signal)
+	signal.Notify(s, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-s
+		b.Stop()
+		os.Exit(1)
+	}()
+
 	for i := 0; i < 1000; i++ {
 		if r, err := http.Get(fmt.Sprintf("http://localhost:%d/json/version", b.Port)); err == nil {
 			defer r.Body.Close()

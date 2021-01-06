@@ -5,9 +5,7 @@ import (
 	"flag"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/niklasfasching/goheadless"
 )
@@ -23,13 +21,6 @@ func main() {
 		log.Fatal(err)
 	}
 	defer h.Stop()
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		h.Stop()
-		os.Exit(1)
-	}()
 	html := goheadless.HTML(*code, flag.Args(), strings.Fields(*args))
 	messages := h.Run(context.Background(), html)
 	for m := range messages {
