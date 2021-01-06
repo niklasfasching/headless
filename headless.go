@@ -127,7 +127,7 @@ func (h *Runner) Start() error {
 		return err
 	}
 	go h.server.Serve(l)
-	if err := h.Browser.Start("http://" + address + "/_main"); err != nil {
+	if err := h.Browser.Start("http://" + address + "/_headless"); err != nil {
 		return err
 	}
 	<-h.connected
@@ -144,12 +144,13 @@ func (h *Runner) Stop() error {
 
 func (h *Runner) Run(ctx context.Context, html string) chan Message {
 	h.id++
-	path, r := fmt.Sprintf("/_run_%d", h.id), &run{html: html, messages: make(chan Message)}
-	h.runs.Store(path, r)
-	websocket.JSON.Send(h.ws, map[string]interface{}{"method": "open", "path": path, "isRun": true})
+	url, r := fmt.Sprintf("http://localhost:%d/_headless_run_%d", h.Port, h.id), &run{html: html, messages: make(chan Message)}
+	h.runs.Store(url, r)
+
+	websocket.JSON.Send(h.ws, map[string]interface{}{"method": "open", "url": url})
 	go func() {
 		<-ctx.Done()
-		websocket.JSON.Send(h.ws, map[string]interface{}{"method": "close", "path": path, "isRun": true})
+		websocket.JSON.Send(r.ws, map[string]interface{}{"method": "close"})
 	}()
 	return r.messages
 }
@@ -165,10 +166,10 @@ func (h *Runner) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			files = append(files, i.Name())
 		}
 		json.NewEncoder(w).Encode(files)
-	} else if r.URL.Path == "/_main" {
+	} else if r.URL.Path == "/_headless" {
 		w.Write([]byte(runHTML))
-	} else if strings.HasPrefix(r.URL.Path, "/_run_") {
-		r, _ := h.runs.Load(r.URL.Path)
+	} else if strings.HasPrefix(r.URL.Path, "/_headless_run_") {
+		r, _ := h.runs.Load(fmt.Sprintf("http://localhost:%d%s", h.Port, r.URL.Path))
 		w.Write([]byte(r.(*run).html))
 	} else {
 		http.FileServer(http.Dir("./")).ServeHTTP(w, r)
@@ -179,25 +180,26 @@ func (h *Runner) handleWebsocket(ws *websocket.Conn) {
 	if !strings.HasPrefix(ws.Config().Origin.Host, "localhost:") {
 		return
 	}
-	websocket.JSON.Send(ws, map[string]interface{}{"method": "connect", "url": h.Browser.websocketURL})
-	key := ws.Config().Location.Path
-	if key == "/_main" {
+	websocket.JSON.Send(ws, map[string]interface{}{"method": "connect", "browserWebsocketUrl": h.Browser.websocketURL})
+	path := ws.Config().Location.Path
+	url := fmt.Sprintf("http://localhost:%d%s", h.Port, path)
+	if path == "/_headless" {
 		h.ws = ws
 	} else {
-		v, _ := h.runs.Load(key)
+		v, _ := h.runs.Load(url)
 		v.(*run).ws = ws
 	}
 	for {
 		m := struct {
-			Key    string
+			Url    string
 			Method string
 			Args   []interface{}
 		}{}
 		if err := websocket.JSON.Receive(ws, &m); err != nil {
-			if _, ok := h.runs.Load(key); h.Browser.cmd == nil || (key != "/_main" && !ok) {
+			if _, ok := h.runs.Load(url); h.Browser.cmd == nil || (path != "/_headless" && !ok) {
 				return
 			}
-			panic(fmt.Sprintf("%s: %s", key, err))
+			panic(fmt.Sprintf("%s: %s", url, err))
 		}
 		switch m.Method {
 		case "connect":
@@ -207,11 +209,11 @@ func (h *Runner) handleWebsocket(ws *websocket.Conn) {
 				close(h.connected)
 			}
 		case "close":
-			r, _ := h.runs.LoadAndDelete(m.Key)
+			r, _ := h.runs.LoadAndDelete(m.Url)
 			close(r.(*run).messages)
 			r.(*run).ws.Close()
 		default:
-			r, _ := h.runs.Load(m.Key)
+			r, _ := h.runs.Load(m.Url)
 			r.(*run).messages <- Message{m.Method, m.Args}
 		}
 	}

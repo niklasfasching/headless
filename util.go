@@ -71,5 +71,5 @@ func HTML(code string, files, args []string) string {
 	if code != "" {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
-	return strings.ReplaceAll(runHTML, "</head>", html+"</head>")
+	return strings.ReplaceAll(runHTML, "</template>", html+"</template>")
 }

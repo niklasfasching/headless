@@ -48,34 +48,14 @@ var runTestCases = []testCase{
 		name:  "exit with error on import error",
 		files: []string{"./testdata/doesNotExist.mjs"},
 		messages: []Message{
-			{Method: "exception", Args: []interface{}{"Error: failed to import ./testdata/doesNotExist.mjs\n    at HTMLScriptElement.onerror (http://localhost:9001/_run_4:147:137)\n    at http://localhost:9001/_run_4:146:136"}}},
+			{Method: "exception", Args: []interface{}{"Error: failed to import ./testdata/doesNotExist.mjs\n    at HTMLScriptElement.onerror (\u003canonymous\u003e:2:7)\n    at undefined:1:6"}}},
 	},
 
 	{
 		name: "log uncaught error",
 		code: "invalid code",
 		messages: []Message{
-			{Method: "exception", Args: []interface{}{"SyntaxError: Unexpected identifier\n    at http://localhost:9001/_run_5:147:8"}},
-		},
-	},
-
-	{
-		name: "receive messages from pages opened in runs",
-		code: `
-          console.log("code");
-          (async () => {
-            await headless.ready;
-            const page = await headless.open({path: "testdata/index.html"})
-            while (true) {
-              const {result: {value}} = await page.call("Runtime.evaluate", {expression: "document.readyState"});
-              if (value === "complete") return void close(0);
-              else await new Promise(r => setTimeout(r, 100))
-            }
-          })()`,
-		messages: []Message{
-			{Method: "log", Args: []interface{}{"code"}},
-			{Method: "log", Args: []interface{}{"index"}},
-			{Method: "clear", Args: []interface{}{0}},
+			{Method: "exception", Args: []interface{}{"SyntaxError: Unexpected identifier\n    at Headless.connect (http://localhost:9001/_headless_run_5:99:24)\n    at http://localhost:9001/_headless_run_5:1:8"}},
 		},
 	},
 }
