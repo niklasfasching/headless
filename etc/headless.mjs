@@ -63,6 +63,9 @@ class Headless {
       this[params.method](params);
     };
     this.ready = new Promise((resolve) => { this.resolve = resolve; });
+    window.onunload = () => {
+      for (const t of this.targets) this.browser.call("Target.closeTarget", t);
+    };
   }
 
   async connect({browserWebsocketUrl}) {
@@ -100,7 +103,6 @@ class Headless {
 
   async close() {
     await this.server.call({url: location.href, method: "close"});
-    for (const t of this.targets) await this.browser.call("Target.closeTarget", t);
     await this.browser.call("Target.closeTarget", {targetId: this.targetId});
   }
 }
