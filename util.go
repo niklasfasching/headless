@@ -1,7 +1,7 @@
 package goheadless
 
 import (
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-//go:embed etc/run.html
-var runHTML string
+//go:embed etc/*
+var Etc embed.FS
 
 var colorRegexp = regexp.MustCompile(`\bcolor\s*:\s*(\w+)\b`)
 
@@ -71,5 +71,10 @@ func HTML(code string, files, args []string) string {
 	if code != "" {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
-	return strings.ReplaceAll(runHTML, "</template>", html+"</template>")
+
+	runHTML, err := Etc.ReadFile("etc/run.html")
+	if err != nil {
+		panic(err)
+	}
+	return strings.ReplaceAll(string(runHTML), "</template>", html+"</template>")
 }

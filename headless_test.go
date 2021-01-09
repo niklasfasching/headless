@@ -34,7 +34,7 @@ var runTestCases = []testCase{
 
 	{
 		name:  "import module - log(warn) object and exit 0",
-		files: []string{"./testdata/index.mjs"},
+		files: []string{"/testdata/index.mjs"},
 	},
 
 	{

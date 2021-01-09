@@ -167,10 +167,12 @@ func (h *Runner) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(files)
 	} else if r.URL.Path == "/_headless" {
-		w.Write([]byte(runHTML))
+		w.Write([]byte(HTML("", nil, nil)))
 	} else if strings.HasPrefix(r.URL.Path, "/_headless_run_") {
 		r, _ := h.runs.Load(fmt.Sprintf("http://localhost:%d%s", h.Port, r.URL.Path))
 		w.Write([]byte(r.(*run).html))
+	} else if strings.HasPrefix(r.URL.Path, "/_headless/") {
+		http.StripPrefix("/_headless/", http.FileServer(http.FS(Etc))).ServeHTTP(w, r)
 	} else {
 		http.FileServer(http.Dir("./")).ServeHTTP(w, r)
 	}
