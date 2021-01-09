@@ -53,7 +53,7 @@
     {
       "Method": "exception",
       "Args": [
-        "SyntaxError: Unexpected identifier\n    at Headless.connect (http://localhost:9001/_headless/etc/headless.mjs:83:19)\n    at http://localhost:9001/_headless_run_5:1:8"
+        "SyntaxError: Unexpected identifier\n    at Headless.onconnect (http://localhost:9001/_headless/etc/headless.mjs:83:19)\n    at http://localhost:9001/_headless_run_5:1:8"
       ]
     }
   ],

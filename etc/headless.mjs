@@ -57,7 +57,7 @@ class Headless {
     this.server.onerror = (err) => { throw err };
     this.server.onmessage = ({data}) => {
       const params = JSON.parse(data);
-      this[params.method](params);
+      this["on" + params.method](params);
     };
     this.ready = new Promise((resolve) => { this.resolve = resolve; });
     window.onunload = () => {
@@ -65,7 +65,7 @@ class Headless {
     };
   }
 
-  async connect({browserWebsocketUrl}) {
+  async onconnect({browserWebsocketUrl}) {
     this.browser = new CDP(browserWebsocketUrl);
     await this.browser.ready.then(this.resolve);
     const {targetInfos} = await this.browser.call("Target.getTargets");
@@ -83,24 +83,25 @@ class Headless {
     document.body.append(document.head.querySelector("template").content);
   }
 
-  async open({url}) {
+  async onopen({url}) {
     await this.ready;
-    if (location.pathname === "_headless") {
-      const {targetId} = await this.browser.call("Target.createTarget", {url});
-      this.targets.push({targetId, url});
-    } else {
-      const {targetId} = await this.browser.call("Target.createTarget", {url: "about:blank"});
-      this.targets.push({targetId, url});
-      const page = new CDP(`${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`);
-      await page.ready;
-      await page.call("Page.navigate", {url});
-      return page;
-    }
+    const {targetId} = await this.browser.call("Target.createTarget", {url});
+    this.targets.push({targetId, url});
   }
 
-  async close() {
+  async onclose() {
     await this.server.call({url: location.href, method: "close"});
     await this.browser.call("Target.closeTarget", {targetId: this.targetId});
+  }
+
+  async open({url}) {
+    await this.ready;
+    const {targetId} = await this.browser.call("Target.createTarget", {url: "about:blank"});
+    this.targets.push({targetId, url});
+    const page = new CDP(`${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`);
+    await page.ready;
+    await page.call("Page.navigate", {url});
+    return page;
   }
 }
 
