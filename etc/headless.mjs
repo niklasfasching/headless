@@ -26,17 +26,14 @@ class CDP {
     });
   }
 
-  async waitFor(expression, afterExpression = () => {}) {
+  async waitFor(expression, afterExpression = x => x) {
     const {result, exceptionDetails} = await this.call("Runtime.evaluate", {
       awaitPromise: true,
       expression: `
            (async () => {
              while (true) {
                const result = await ${expression};
-               if (result) {
-                 await (${afterExpression})(result);
-                 return result;
-               }
+               if (result) return await (${afterExpression})(result);
                await new Promise(r => setTimeout(r, 100));
              }
            })()`,
