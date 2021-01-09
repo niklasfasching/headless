@@ -3,8 +3,13 @@ package goheadless
 import (
 	"context"
 	"encoding/json"
+	"flag"
+	"fmt"
+	"io/ioutil"
 	"testing"
 )
+
+var updateTestData = flag.Bool("update-test-data", false, "update test data rather than actually running tests")
 
 type testCase struct {
 	name   string
@@ -20,73 +25,83 @@ var runTestCases = []testCase{
 	{
 		name: "log(log) number and exit 0",
 		code: "console.log(1); close()",
-		messages: []Message{
-			{Method: "log", Args: []interface{}{1}},
-			{Method: "clear", Args: []interface{}{0}},
-		},
 	},
 
 	{
 		name: "log(info) string and exit 1",
 		code: "console.info('foo'); close(1)",
-		messages: []Message{
-			{Method: "info", Args: []interface{}{"foo"}},
-			{Method: "clear", Args: []interface{}{1}},
-		},
 	},
 
 	{
 		name:  "import module - log(warn) object and exit 0",
 		files: []string{"./testdata/index.mjs"},
-		messages: []Message{
-			{Method: "warning", Args: []interface{}{`{foo: bar}`}},
-			{Method: "clear", Args: []interface{}{0}},
-		},
 	},
 
 	{
 		name:  "exit with error on import error",
 		files: []string{"./testdata/doesNotExist.mjs"},
-		messages: []Message{
-			{Method: "exception", Args: []interface{}{"Error: failed to import ./testdata/doesNotExist.mjs\n    at HTMLScriptElement.onerror (\u003canonymous\u003e:2:7)\n    at undefined:1:6"}}},
 	},
 
 	{
 		name: "log uncaught error",
 		code: "invalid code",
-		messages: []Message{
-			{Method: "exception", Args: []interface{}{"SyntaxError: Unexpected identifier\n    at Headless.connect (http://localhost:9001/_headless_run_5:99:24)\n    at http://localhost:9001/_headless_run_5:1:8"}},
-		},
+	},
+	{
+		name: "closes opened child targets with the respective runs",
+		code: `
+          (async () => {
+            const {targetInfos} = await headless.browser.call("Target.getTargets");
+            console.log(targetInfos.length)
+            close(0)
+           })()
+        `,
 	},
 }
 
 func TestRun(t *testing.T) {
-	h := &Runner{Port: 9001}
-	if err := h.Start(); err != nil {
+	flag.Parse()
+
+	r := &Runner{Port: 9001}
+	if err := r.Start(); err != nil {
 		t.Error(err)
 		return
 	}
-	defer h.Stop()
-	for _, tc := range runTestCases {
+	defer r.Stop()
+
+	bs, err := ioutil.ReadFile("testdata/results.json")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	expected := map[string]json.RawMessage{}
+	if !*updateTestData {
+		json.Unmarshal(bs, &expected)
+	}
+	for i, tc := range runTestCases {
 		t.Run(tc.name, func(t *testing.T) {
+			key := fmt.Sprintf("%d: %s", i, tc.name)
 			ctx, cancel := context.WithCancel(context.Background())
-			c := h.Run(ctx, HTML(tc.code, tc.files, tc.args))
-			test(t, tc, c, cancel)
+			c := r.Run(ctx, HTML(tc.code, tc.files, tc.args))
+			messages := []Message{}
+			for m := range c {
+				messages = append(messages, m)
+				if m.Method == "clear" || m.Method == "exception" {
+					cancel()
+				}
+			}
+			actual, _ := json.MarshalIndent(messages, "  ", "  ")
+			if *updateTestData {
+				expected[key] = actual
+			} else if string(actual) != string(expected[key]) {
+				t.Errorf("messages differ: %s !== %s", string(actual), string(expected[key]))
+			}
 		})
 	}
-}
 
-func test(t *testing.T, tc testCase, c chan Message, cancel func()) {
-	messages := []Message{}
-	for m := range c {
-		messages = append(messages, m)
-		if m.Method == "clear" || m.Method == "exception" {
-			cancel()
+	if *updateTestData {
+		bs, _ := json.MarshalIndent(expected, "", "  ")
+		if err := ioutil.WriteFile("testdata/results.json", bs, 0666); err != nil {
+			t.Error(err)
 		}
-	}
-	expectedMessagesJSON, _ := json.Marshal(tc.messages)
-	actualMessagesJSON, _ := json.Marshal(messages)
-	if string(expectedMessagesJSON) != string(actualMessagesJSON) {
-		t.Errorf("messages differ: %s !== %s", string(actualMessagesJSON), string(expectedMessagesJSON))
 	}
 }
