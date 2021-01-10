@@ -1,4 +1,4 @@
-class CDP {
+export class Connection {
   id = 0
   commands = {}
   handlers = {}
@@ -8,13 +8,17 @@ class CDP {
     this.ws.onmessage = ({data}) => {
       const json = JSON.parse(data)
       if (this.commands[json.id]) this.commands[json.id](json);
-      else this.handlers[json.method]?.(json.params);
+      else this.handlers["on"+json.method]?.(json.params);
     };
     this.ws.onerror = (err) => { throw err };
     this.ready = new Promise((resolve) => { this.ws.onopen = resolve });
   }
 
-  call(method, params) {
+  emit(method, params) {
+    this.ws.send(JSON.stringify({method, params}));
+  }
+
+  call(method, params, noreply) {
     const id = this.id++, err = new Error();
     return new Promise((resolve, reject) => {
       this.commands[id] = ({result, error}) => {
@@ -22,10 +26,37 @@ class CDP {
         if (error) reject(Object.assign(err, {message: `${method}(${JSON.stringify(params)}): ${error.message} (${error.code})`}));
         else resolve(result);
       };
-      this.ws.send(JSON.stringify({method, id, params}));
+      this.ws.send(JSON.stringify({id, method, params}));
     });
   }
 
+  on(method, f) {
+    this.handlers["on"+method] = f;
+  }
+}
+
+export class Browser extends Connection {
+  targets = []
+
+  constructor(url) {
+    super(url);
+    window.onunload = () => {
+      for (const t of this.targets) this.browser.call("Target.closeTarget", t);
+    };
+  }
+
+  async open({url}) {
+    await this.ready;
+    const {targetId} = await this.browser.call("Target.createTarget", {url: "about:blank"});
+    this.targets.push({targetId, url});
+    const page = new CDP(`${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`);
+    await page.ready;
+    await page.call("Page.navigate", {url});
+    return page;
+  }
+}
+
+export class Page extends Connection {
   async waitFor(expression, afterExpression = x => x) {
     const {result, exceptionDetails} = await this.call("Runtime.evaluate", {
       awaitPromise: true,
@@ -41,67 +72,42 @@ class CDP {
     if (exceptionDetails) throw new Error(formatExceptionDetails(exceptionDetails));
     return result;
   }
-
-  on(event, f) {
-    this.handlers[event] = f;
-  }
 }
 
-class Headless {
-  targets = []
-
+export class Headless {
   constructor(url) {
-    this.server = new WebSocket(url);
-    this.server.call = (msg) => this.server.send(JSON.stringify(msg));
-    this.server.onopen = () => this.server.call({method: "connect"});
-    this.server.onerror = (err) => { throw err };
-    this.server.onmessage = ({data}) => {
-      const params = JSON.parse(data);
-      this["on" + params.method](params);
-    };
-    this.ready = new Promise((resolve) => { this.resolve = resolve; });
-    window.onunload = () => {
-      for (const t of this.targets) this.browser.call("Target.closeTarget", t);
-    };
+    this.server = new Connection(url);
+    this.server.handlers = this;
   }
 
   async onconnect({browserWebsocketUrl}) {
-    this.browser = new CDP(browserWebsocketUrl);
-    await this.browser.ready.then(this.resolve);
+    this.browser = new Browser(browserWebsocketUrl);
+    await this.browser.ready;
     const {targetInfos} = await this.browser.call("Target.getTargets");
     const {targetId} = targetInfos.find(t => t.url === location.href);
     this.targetId = targetId;
-    this.page = new CDP(`${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`);
+    const url = `${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`;
+    this.page = new Page(url);
     await this.page.ready;
     await this.page.call("Runtime.enable");
     this.page.on("Runtime.consoleAPICalled", ({type: method, args}) => {
-      this.server.call({url: location.href, method, args: args.map(formatConsoleArg)});
+      this.server.emit(method, {url: location.href, args: args.map(formatConsoleArg)});
     });
     this.page.on("Runtime.exceptionThrown", ({exceptionDetails}) => {
-      this.server.call({url: location.href, method: "exception", args: [formatExceptionDetails(exceptionDetails)]});
+      this.server.emit("exception", {url: location.href, args: [formatExceptionDetails(exceptionDetails)]});
     });
     document.body.append(document.head.querySelector("template").content);
+    this.server.emit("connect", {url});
   }
 
   async onopen({url}) {
-    await this.ready;
-    const {targetId} = await this.browser.call("Target.createTarget", {url});
-    this.targets.push({targetId, url});
+    await this.browser.ready;
+    await this.browser.call("Target.createTarget", {url});
   }
 
   async onclose() {
-    await this.server.call({url: location.href, method: "close"});
+    this.server.emit("close", {url: location.href});
     await this.browser.call("Target.closeTarget", {targetId: this.targetId});
-  }
-
-  async open({url}) {
-    await this.ready;
-    const {targetId} = await this.browser.call("Target.createTarget", {url: "about:blank"});
-    this.targets.push({targetId, url});
-    const page = new CDP(`${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`);
-    await page.ready;
-    await page.call("Page.navigate", {url});
-    return page;
   }
 }
 
@@ -121,15 +127,3 @@ function formatExceptionDetails(exceptionDetails) {
   const {exception: {description}, url, lineNumber, columnNumber} = exceptionDetails;
   return `${description}\n    at ${url}:${lineNumber}:${columnNumber}`
 }
-
-window.headless = new Headless(`ws://${location.host}${location.pathname}`);
-window.isHeadless = navigator.webdriver;
-window.close = (code = 0) => isHeadless ? console.clear(code) : console.log("exit:", code);
-window.openIframe = (src) => {
-  return new Promise((resolve, reject) => {
-    const iframe = document.createElement("iframe");
-    const onerror = reject;
-    const onload = () => resolve(iframe);
-    document.body.appendChild(Object.assign(iframe, {onload, onerror, src}));
-  });
-};

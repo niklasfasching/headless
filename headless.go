@@ -47,12 +47,14 @@ type Browser struct {
 type Message struct {
 	Method string
 	Args   []interface{}
+	id     int
 }
 
-type run struct {
-	html     string
-	messages chan Message
-	ws       *websocket.Conn
+type Run struct {
+	URL      string
+	HTML     string
+	Messages chan Message
+	WS       *websocket.Conn
 }
 
 func (b *Browser) Start(url string) error {
@@ -142,17 +144,23 @@ func (h *Runner) Stop() error {
 	return h.server.Close()
 }
 
-func (h *Runner) Run(ctx context.Context, html string) chan Message {
+func (h *Runner) Run(ctx context.Context, html string) *Run {
 	h.id++
-	url, r := fmt.Sprintf("http://localhost:%d/_headless_run_%d", h.Port, h.id), &run{html: html, messages: make(chan Message)}
-	h.runs.Store(url, r)
-
-	websocket.JSON.Send(h.ws, map[string]interface{}{"method": "open", "url": url})
+	r := &Run{
+		URL:      fmt.Sprintf("http://localhost:%d/_headless_run_%d", h.Port, h.id),
+		HTML:     html,
+		Messages: make(chan Message),
+	}
+	h.runs.Store(r.URL, r)
+	websocket.JSON.Send(h.ws, map[string]interface{}{
+		"method": "open",
+		"params": map[string]interface{}{"url": r.URL},
+	})
 	go func() {
 		<-ctx.Done()
-		websocket.JSON.Send(r.ws, map[string]interface{}{"method": "close"})
+		websocket.JSON.Send(r.WS, map[string]interface{}{"method": "close"})
 	}()
-	return r.messages
+	return r
 }
 
 func (h *Runner) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +178,7 @@ func (h *Runner) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(HTML("", nil, nil)))
 	} else if strings.HasPrefix(r.URL.Path, "/_headless_run_") {
 		r, _ := h.runs.Load(fmt.Sprintf("http://localhost:%d%s", h.Port, r.URL.Path))
-		w.Write([]byte(r.(*run).html))
+		w.Write([]byte(r.(*Run).HTML))
 	} else if strings.HasPrefix(r.URL.Path, "/_headless/") {
 		http.StripPrefix("/_headless/", http.FileServer(http.FS(Etc))).ServeHTTP(w, r)
 	} else {
@@ -182,20 +190,26 @@ func (h *Runner) handleWebsocket(ws *websocket.Conn) {
 	if !strings.HasPrefix(ws.Config().Origin.Host, "localhost:") {
 		return
 	}
-	websocket.JSON.Send(ws, map[string]interface{}{"method": "connect", "browserWebsocketUrl": h.Browser.websocketURL})
+	websocket.JSON.Send(ws, map[string]interface{}{
+		"method": "connect",
+		"params": map[string]interface{}{"browserWebsocketUrl": h.Browser.websocketURL},
+	})
 	path := ws.Config().Location.Path
 	url := fmt.Sprintf("http://localhost:%d%s", h.Port, path)
 	if path == "/_headless" {
 		h.ws = ws
 	} else {
 		v, _ := h.runs.Load(url)
-		v.(*run).ws = ws
+		v.(*Run).WS = ws
 	}
 	for {
 		m := struct {
-			Url    string
 			Method string
-			Args   []interface{}
+			Id     int
+			Params struct {
+				Url  string
+				Args []interface{}
+			}
 		}{}
 		if err := websocket.JSON.Receive(ws, &m); err != nil {
 			if _, ok := h.runs.Load(url); h.Browser.cmd == nil || (path != "/_headless" && !ok) {
@@ -211,12 +225,18 @@ func (h *Runner) handleWebsocket(ws *websocket.Conn) {
 				close(h.connected)
 			}
 		case "close":
-			r, _ := h.runs.LoadAndDelete(m.Url)
-			close(r.(*run).messages)
-			r.(*run).ws.Close()
+			r, _ := h.runs.LoadAndDelete(m.Params.Url)
+			close(r.(*Run).Messages)
+			r.(*Run).WS.Close()
 		default:
-			r, _ := h.runs.Load(m.Url)
-			r.(*run).messages <- Message{m.Method, m.Args}
+			r, _ := h.runs.Load(m.Params.Url)
+			r.(*Run).Messages <- Message{m.Method, m.Params.Args, m.Id}
 		}
 	}
+}
+
+func (r *Run) Respond(m Message, v interface{}) {
+	websocket.JSON.Send(r.WS, map[string]interface{}{
+		"data": map[string]interface{}{"id": m.id, "result": v},
+	})
 }

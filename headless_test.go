@@ -81,9 +81,9 @@ func TestRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			key := fmt.Sprintf("%d: %s", i, tc.name)
 			ctx, cancel := context.WithCancel(context.Background())
-			c := r.Run(ctx, HTML(tc.code, tc.files, tc.args))
+			run := r.Run(ctx, HTML(tc.code, tc.files, tc.args))
 			messages := []Message{}
-			for m := range c {
+			for m := range run.Messages {
 				messages = append(messages, m)
 				if m.Method == "clear" || m.Method == "exception" {
 					cancel()

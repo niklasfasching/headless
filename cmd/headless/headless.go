@@ -22,8 +22,9 @@ func main() {
 	}
 	defer h.Stop()
 	html := goheadless.HTML(*code, flag.Args(), strings.Fields(*args))
-	messages := h.Run(context.Background(), html)
-	for m := range messages {
+	r := h.Run(context.Background(), html)
+	log.Println("Running on", r.URL)
+	for m := range r.Messages {
 		if m.Method == "clear" && len(m.Args) == 1 {
 			exitCode, ok := m.Args[0].(float64)
 			if !ok {
