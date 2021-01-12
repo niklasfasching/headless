@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"regexp"
@@ -11,7 +12,8 @@ import (
 )
 
 //go:embed etc/*
-var Etc embed.FS
+var etc embed.FS
+var Etc fs.FS
 
 var colorRegexp = regexp.MustCompile(`\bcolor\s*:\s*(\w+)\b`)
 
@@ -24,6 +26,14 @@ var Colors = map[string]int{
 	"purple": 35,
 	"cyan":   36,
 	"grey":   37,
+}
+
+func init() {
+	if strings.HasPrefix(os.Args[0], "/tmp/go-build") {
+		Etc = os.DirFS("etc")
+	} else {
+		Etc, _ = fs.Sub(etc, "etc")
+	}
 }
 
 func Colorize(m Message) string {
@@ -72,9 +82,6 @@ func HTML(code string, files, args []string) string {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
 
-	runHTML, err := Etc.ReadFile("etc/run.html")
-	if err != nil {
-		panic(err)
-	}
+	runHTML, _ := fs.ReadFile(Etc, "run.html")
 	return strings.ReplaceAll(string(runHTML), "</template>", html+"</template>")
 }

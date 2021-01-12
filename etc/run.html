@@ -11,7 +11,7 @@
      }
     </style>
     <script type="module">
-     import {Headless} from "/_headless/etc/headless.mjs"
+     import {Headless} from "/_headless/headless.mjs"
      window.headless = new Headless(`ws://${location.host}${location.pathname}`);
      window.isHeadless = true // navigator.webdriver;
      window.close = (code = 0) => isHeadless ? console.clear(code) : console.log("exit:", code);
