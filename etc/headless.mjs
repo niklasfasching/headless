@@ -3,7 +3,8 @@ export class Connection {
   commands = {}
   handlers = {}
 
-  constructor(url) {
+  constructor(url, properties) {
+    Object.assign(this, properties);
     this.ws = new WebSocket(url);
     this.ws.onmessage = ({data}) => {
       const json = JSON.parse(data)
@@ -23,7 +24,7 @@ export class Connection {
     return new Promise((resolve, reject) => {
       this.commands[id] = ({result, error}) => {
         delete this.commands[id];
-        if (error) reject(Object.assign(err, {message: `${method}(${JSON.stringify(params)}): ${error.message} (${error.code})`}));
+        if (error) reject(Object.assign(err, {message: formatErrorMessage(method, params, error)}));
         else resolve(result);
       };
       this.ws.send(JSON.stringify({id, method, params}));
@@ -40,16 +41,13 @@ export class Browser extends Connection {
 
   constructor(url) {
     super(url);
-    window.onunload = () => {
-      for (const t of this.targets) this.browser.call("Target.closeTarget", t);
-    };
   }
 
   async open({url}) {
     await this.ready;
-    const {targetId} = await this.browser.call("Target.createTarget", {url: "about:blank"});
+    const {targetId} = await this.call("Target.createTarget", {url: "about:blank"});
     this.targets.push({targetId, url});
-    const page = new CDP(`${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`);
+    const page = new Page(`${new URL(this.ws.url).origin}/devtools/page/${targetId}`, {targetId});
     await page.ready;
     await page.call("Page.navigate", {url});
     return page;
@@ -72,6 +70,19 @@ export class Page extends Connection {
     if (exceptionDetails) throw new Error(formatExceptionDetails(exceptionDetails));
     return result;
   }
+
+  async screenshot(append) {
+    const {data} = await this.call("Page.captureScreenshot");
+    const url = `data:image/png;base64,${data}`;
+    if (append) {
+      const img = Object.assign(document.getElementById("screenshot") || new Image(), {
+        id: "screenshot",
+        src: url,
+      });
+      document.body.append(img);
+    }
+    return url;
+  }
 }
 
 export class Headless {
@@ -87,7 +98,7 @@ export class Headless {
     const {targetId} = targetInfos.find(t => t.url === location.href);
     this.targetId = targetId;
     const url = `${new URL(this.browser.ws.url).origin}/devtools/page/${targetId}`;
-    this.page = new Page(url);
+    this.page = new Page(url, {targetId});
     await this.page.ready;
     await this.page.call("Runtime.enable");
     this.page.on("Runtime.consoleAPICalled", ({type: method, args}) => {
@@ -96,6 +107,11 @@ export class Headless {
     this.page.on("Runtime.exceptionThrown", ({exceptionDetails}) => {
       this.server.emit("exception", {url: location.href, args: [formatExceptionDetails(exceptionDetails)]});
     });
+
+    window.onbeforeunload = () => {
+      for (const t of this.browser.targets) this.browser.call("Target.closeTarget", t);
+    }
+
     document.body.append(document.head.querySelector("template").content);
     this.server.emit("connect", {url});
   }
@@ -126,4 +142,8 @@ function formatConsoleArg({type: t, subtype, value, description, preview}) {
 function formatExceptionDetails(exceptionDetails) {
   const {exception: {description}, url, lineNumber, columnNumber} = exceptionDetails;
   return `${description}\n    at ${url}:${lineNumber}:${columnNumber}`
+}
+
+function formatErrorMessage(method, params, {message, data, code}) {
+  return `${method}(${JSON.stringify(params)}): ${message} ${data} (${code})`
 }
