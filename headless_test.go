@@ -1,4 +1,4 @@
-package goheadless
+package headless
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-module github.com/niklasfasching/goheadless
+module github.com/niklasfasching/headless
 
 go 1.16
 

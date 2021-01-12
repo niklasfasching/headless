@@ -1,4 +1,4 @@
-package goheadless
+package headless
 
 import (
 	"context"
@@ -70,7 +70,7 @@ func (b *Browser) Start(url string) error {
 		}
 	}
 	if b.Executable == "" {
-		if executable := os.Getenv("GOHEADLESS_EXECUTABLE"); executable != "" {
+		if executable := os.Getenv("HEADLESS_EXECUTABLE"); executable != "" {
 			b.Executable = executable
 		} else {
 			b.Executable = "chromium-browser"

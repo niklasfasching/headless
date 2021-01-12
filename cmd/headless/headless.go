@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/niklasfasching/goheadless"
+	"github.com/niklasfasching/headless"
 )
 
 var code = flag.String("c", "", "code to run after files have been imported")
@@ -16,12 +16,12 @@ var args = flag.String("a", "", "window.args - split via strings.Fields")
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
-	h := &goheadless.Runner{}
+	h := &headless.Runner{}
 	if err := h.Start(); err != nil {
 		log.Fatal(err)
 	}
 	defer h.Stop()
-	html := goheadless.HTML(*code, flag.Args(), strings.Fields(*args))
+	html := headless.HTML(*code, flag.Args(), strings.Fields(*args))
 	r := h.Run(context.Background(), html)
 	log.Println("Running on", r.URL)
 	for m := range r.Messages {
@@ -32,7 +32,7 @@ func main() {
 			}
 			os.Exit(int(exitCode))
 		} else if m.Method == "info" {
-			log.Println(goheadless.Colorize(m))
+			log.Println(headless.Colorize(m))
 		} else {
 			log.Println(append([]interface{}{m.Method}, m.Args...)...)
 		}
