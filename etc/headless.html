@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+     html, body {
+       height: 100%;
+       width: 100%;
+       margin: 0;
+     }
+    </style>
+    <script type="module">
+     import {Headless} from "/_headless/headless.mjs"
+     window.headless = new Headless(`ws://${location.host}${location.pathname}`);
+    </script>
+    <!-- head -->
+    <template></template>
+  </head>
+</html>

@@ -1,2 +1,2 @@
 console.warn({foo: "bar"});
-close(0);
+console.clear(0);

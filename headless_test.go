@@ -24,12 +24,12 @@ type testCase struct {
 var runTestCases = []testCase{
 	{
 		name: "log(log) number and exit 0",
-		code: "console.log(1); close()",
+		code: "console.log(1); console.clear(0)",
 	},
 
 	{
 		name: "log(info) string and exit 1",
-		code: "console.info('foo'); close(1)",
+		code: "console.info('foo'); console.clear(1)",
 	},
 
 	{
@@ -52,7 +52,7 @@ var runTestCases = []testCase{
           (async () => {
             const {targetInfos} = await headless.browser.call("Target.getTargets");
             console.log(targetInfos.length)
-            close(0)
+            console.clear(0)
            })()
         `,
 	},
@@ -81,7 +81,7 @@ func TestRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			key := fmt.Sprintf("%d: %s", i, tc.name)
 			ctx, cancel := context.WithCancel(context.Background())
-			run := h.Run(ctx, HTML(tc.code, tc.files, tc.args))
+			run := h.Run(ctx, HTML("", TemplateHTML(tc.code, tc.files, tc.args)))
 			messages := []Message{}
 			for m := range run.Messages {
 				messages = append(messages, m)
@@ -89,6 +89,7 @@ func TestRun(t *testing.T) {
 					cancel()
 				}
 			}
+			cancel()
 			actual, _ := json.MarshalIndent(messages, "  ", "  ")
 			if *updateTestData {
 				expected[key] = actual

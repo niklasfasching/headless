@@ -21,7 +21,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer h.Stop()
-	html := headless.HTML(*code, flag.Args(), strings.Fields(*args))
+	html := headless.HTML("", headless.TemplateHTML(*code, flag.Args(), strings.Fields(*args)))
 	r := h.Run(context.Background(), html)
 	log.Println("Running on", r.URL)
 	for m := range r.Messages {

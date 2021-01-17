@@ -75,7 +75,13 @@ func GetFreePort() int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
-func HTML(code string, files, args []string) string {
+func HTML(headHTML, templateHTML string) string {
+	bs, _ := fs.ReadFile(Etc, "headless.html")
+	html := strings.ReplaceAll(string(bs), "</template>", templateHTML+"</template>")
+	return strings.ReplaceAll(html, "<!-- head -->", headHTML)
+}
+
+func TemplateHTML(code string, files, args []string) string {
 	argsBytes, _ := json.Marshal(args)
 	html := fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
 	html += `<script type="module" onerror="throw new Error('failed to import files')">` + "\n"
@@ -86,6 +92,5 @@ func HTML(code string, files, args []string) string {
 	if code != "" {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
-	runHTML, _ := fs.ReadFile(Etc, "run.html")
-	return strings.ReplaceAll(string(runHTML), "</template>", html+"</template>")
+	return html
 }
