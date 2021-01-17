@@ -195,12 +195,13 @@ func (h *H) handleWebsocket(ws *websocket.Conn) {
 		"params": map[string]interface{}{"browserWebsocketUrl": h.Browser.websocketURL},
 	})
 	path := ws.Config().Location.Path
-	url := fmt.Sprintf("http://localhost:%d%s", h.Port, path)
+	url, messages := fmt.Sprintf("http://localhost:%d%s", h.Port, path), chan Message(nil)
 	if path == "/_headless" {
 		h.ws = ws
 	} else {
 		v, _ := h.runs.Load(url)
 		v.(*Run).WS = ws
+		messages = v.(*Run).Messages
 	}
 	for {
 		m := struct {
@@ -223,12 +224,15 @@ func (h *H) handleWebsocket(ws *websocket.Conn) {
 				close(h.connected)
 			}
 		case "close":
-			r, _ := h.runs.LoadAndDelete(m.Params.Url)
-			close(r.(*Run).Messages)
-			r.(*Run).WS.Close()
+			h.runs.Delete(m.Params.Url)
+			close(messages)
+			ws.Close()
 		default:
-			r, _ := h.runs.Load(m.Params.Url)
-			r.(*Run).Messages <- Message{m.Method, m.Params.Args, m.Id}
+			if path == "/_headless" {
+				log.Printf("unexpected message %#v", m)
+			} else {
+				messages <- Message{m.Method, m.Params.Args, m.Id}
+			}
 		}
 	}
 }
