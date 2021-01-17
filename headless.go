@@ -24,7 +24,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-type Runner struct {
+type H struct {
 	Port    int
 	Browser Browser
 
@@ -117,7 +117,7 @@ func (b *Browser) Stop() error {
 	return err
 }
 
-func (h *Runner) Start() error {
+func (h *H) Start() error {
 	if h.Port == 0 {
 		h.Port = GetFreePort()
 	}
@@ -136,7 +136,7 @@ func (h *Runner) Start() error {
 	return nil
 }
 
-func (h *Runner) Stop() error {
+func (h *H) Stop() error {
 	if err := h.Browser.Stop(); err != nil {
 		log.Fatal(err)
 		return err
@@ -144,7 +144,7 @@ func (h *Runner) Stop() error {
 	return h.server.Close()
 }
 
-func (h *Runner) Run(ctx context.Context, html string) *Run {
+func (h *H) Run(ctx context.Context, html string) *Run {
 	h.id++
 	r := &Run{
 		URL:      fmt.Sprintf("http://localhost:%d/_headless_run_%d", h.Port, h.id),
@@ -163,7 +163,7 @@ func (h *Runner) Run(ctx context.Context, html string) *Run {
 	return r
 }
 
-func (h *Runner) serveHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *H) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") == "websocket" {
 		websocket.Handler(h.handleWebsocket).ServeHTTP(w, r)
 	} else if r.Method == "POST" {
@@ -186,7 +186,7 @@ func (h *Runner) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Runner) handleWebsocket(ws *websocket.Conn) {
+func (h *H) handleWebsocket(ws *websocket.Conn) {
 	if !strings.HasPrefix(ws.Config().Origin.Host, "localhost:") {
 		return
 	}

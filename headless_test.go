@@ -61,12 +61,12 @@ var runTestCases = []testCase{
 func TestRun(t *testing.T) {
 	flag.Parse()
 
-	r := &Runner{Port: 9001}
-	if err := r.Start(); err != nil {
+	h := &H{Port: 9001}
+	if err := h.Start(); err != nil {
 		t.Error(err)
 		return
 	}
-	defer r.Stop()
+	defer h.Stop()
 
 	bs, err := ioutil.ReadFile("testdata/results.json")
 	if err != nil {
@@ -81,7 +81,7 @@ func TestRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			key := fmt.Sprintf("%d: %s", i, tc.name)
 			ctx, cancel := context.WithCancel(context.Background())
-			run := r.Run(ctx, HTML(tc.code, tc.files, tc.args))
+			run := h.Run(ctx, HTML(tc.code, tc.files, tc.args))
 			messages := []Message{}
 			for m := range run.Messages {
 				messages = append(messages, m)

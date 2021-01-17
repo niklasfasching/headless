@@ -16,7 +16,7 @@ var args = flag.String("a", "", "window.args - split via strings.Fields")
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
-	h := &headless.Runner{}
+	h := &headless.H{}
 	if err := h.Start(); err != nil {
 		log.Fatal(err)
 	}
