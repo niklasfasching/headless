@@ -9,11 +9,15 @@
        margin: 0;
      }
     </style>
+    <template></template>
     <script type="module">
      import {Headless} from "/_headless/headless.mjs"
-     window.headless = new Headless(`ws://${location.host}${location.pathname}`);
+     if (location.pathname.startsWith("/_headless")) {
+       window.headless = new Headless(`ws://${location.host}${location.pathname}`);
+     } else {
+       document.body.append(document.head.querySelector("template").content);
+     }
     </script>
     <!-- head -->
-    <template></template>
   </head>
 </html>
