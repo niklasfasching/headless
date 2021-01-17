@@ -7,7 +7,9 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -30,7 +32,8 @@ var Colors = map[string]int{
 
 func init() {
 	if strings.HasPrefix(os.Args[0], "/tmp/go-build") {
-		Etc = os.DirFS("etc")
+		_, filename, _, _ := runtime.Caller(0)
+		Etc = os.DirFS(filepath.Join(filename, "../etc"))
 	} else {
 		Etc, _ = fs.Sub(etc, "etc")
 	}
