@@ -219,9 +219,7 @@ func (h *H) handleWebsocket(ws *websocket.Conn) {
 		}
 		switch m.Method {
 		case "connect":
-			select {
-			case <-h.connected:
-			default:
+			if path == "/_headless" {
 				close(h.connected)
 			}
 		case "close":
