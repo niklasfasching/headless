@@ -78,13 +78,14 @@ func GetFreePort() int {
 func HTML(code string, files, args []string) string {
 	argsBytes, _ := json.Marshal(args)
 	html := fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
+	html += `<script type="module" onerror="throw new Error('failed to import files')">` + "\n"
 	for _, f := range files {
-		html += fmt.Sprintf(`<script type="module" src="%s" onerror="throw new Error('failed to import %s')"></script>`, f, f) + "\n"
+		html += fmt.Sprintf(`import "./%s";`, f) + "\n"
 	}
+	html += "</script>\n"
 	if code != "" {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
-
 	runHTML, _ := fs.ReadFile(Etc, "run.html")
 	return strings.ReplaceAll(string(runHTML), "</template>", html+"</template>")
 }

@@ -45,7 +45,7 @@
     {
       "Method": "exception",
       "Args": [
-        "Error: failed to import ./testdata/doesNotExist.mjs\n    at HTMLScriptElement.onerror (\u003canonymous\u003e:2:7)\n    at undefined:1:6"
+        "Error: failed to import files\n    at HTMLScriptElement.onerror (\u003canonymous\u003e:2:7)\n    at undefined:1:6"
       ]
     }
   ],
