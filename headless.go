@@ -182,6 +182,8 @@ func (h *H) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if strings.HasPrefix(r.URL.Path, "/_headless/") {
 		http.StripPrefix("/_headless/", http.FileServer(http.FS(Etc))).ServeHTTP(w, r)
 	} else {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Expires", "0")
 		http.FileServer(http.Dir("./")).ServeHTTP(w, r)
 	}
 }
