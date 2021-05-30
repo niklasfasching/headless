@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -13,12 +14,26 @@ import (
 var code = flag.String("c", "", "code to run after files have been imported")
 var args = flag.String("a", "", "window.args - split via strings.Fields")
 var browserArgs = flag.String("b", "", "additional browser args")
+var display = flag.Bool("d", false, "display ui")
+var fs = flag.Bool("fs", false, "allow http POST fs (create) access to working directory")
 
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
 	h := &headless.H{}
 	h.Browser.Args = append(headless.DefaultBrowserArgs, strings.Split(*browserArgs, " ")...)
+	if *display {
+		for i, a := range h.Browser.Args {
+			if a == "--headless" {
+				h.Browser.Args = append(h.Browser.Args[:i], h.Browser.Args[i+1:]...)
+				break
+			}
+		}
+	}
+	h.POSTMux = http.DefaultServeMux
+	if *fs {
+		h.POSTMux.HandleFunc("/create", headless.CreateHandler)
+	}
 	if err := h.Start(); err != nil {
 		log.Fatal(err)
 	}

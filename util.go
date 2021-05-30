@@ -4,8 +4,10 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -93,4 +95,15 @@ func TemplateHTML(code string, files, args []string) string {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
 	return html
+}
+
+func CreateHandler(w http.ResponseWriter, r *http.Request) {
+	f, err := os.Create(filepath.Join(".", r.URL.Query().Get("path")))
+	if err != nil {
+		w.WriteHeader(504)
+		fmt.Fprintf(w, "%s", err)
+		return
+	}
+	defer f.Close()
+	io.Copy(f, r.Body)
 }
