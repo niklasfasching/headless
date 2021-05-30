@@ -12,11 +12,13 @@ import (
 
 var code = flag.String("c", "", "code to run after files have been imported")
 var args = flag.String("a", "", "window.args - split via strings.Fields")
+var browserArgs = flag.String("b", "", "additional browser args")
 
 func main() {
 	log.SetFlags(0)
 	flag.Parse()
 	h := &headless.H{}
+	h.Browser.Args = append(headless.DefaultBrowserArgs, strings.Split(*browserArgs, " ")...)
 	if err := h.Start(); err != nil {
 		log.Fatal(err)
 	}

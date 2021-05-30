@@ -57,17 +57,19 @@ type Run struct {
 	WS       *websocket.Conn
 }
 
+var DefaultBrowserArgs = []string{
+	"--headless",
+	"--temp-profile",
+	"--hide-scrollbars",
+	"--autoplay-policy=no-user-gesture-required",
+}
+
 func (b *Browser) Start(url string) error {
 	if b.Port == 0 {
 		b.Port = GetFreePort()
 	}
 	if b.Args == nil {
-		b.Args = []string{
-			"--headless",
-			"--temp-profile",
-			"--hide-scrollbars",
-			"--autoplay-policy=no-user-gesture-required",
-		}
+		b.Args = DefaultBrowserArgs
 	}
 	if b.Executable == "" {
 		if executable := os.Getenv("HEADLESS_EXECUTABLE"); executable != "" {
