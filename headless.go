@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +25,7 @@ import (
 type H struct {
 	Port    int
 	Browser Browser
+	POSTMux *http.ServeMux
 
 	server    http.Server
 	runs      sync.Map
@@ -169,13 +168,12 @@ func (h *H) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") == "websocket" {
 		websocket.Handler(h.handleWebsocket).ServeHTTP(w, r)
 	} else if r.Method == "POST" {
-		w.Header().Set("Content-Type", "application/json")
-		is, _ := ioutil.ReadDir(path.Join("./", r.URL.Path))
-		files := []string{}
-		for _, i := range is {
-			files = append(files, i.Name())
+		if origin := r.Header.Get("Origin"); origin != "" && !strings.HasPrefix(origin, "http://localhost:") {
+			w.WriteHeader(401)
+			log.Printf("cross origin POST from '%s' rejected. Only localhost is allowed to call post handlers", origin)
+			return
 		}
-		json.NewEncoder(w).Encode(files)
+		h.POSTMux.ServeHTTP(w, r)
 	} else if r.URL.Path == "/_headless" {
 		w.Write([]byte(HTML("", "")))
 	} else if strings.HasPrefix(r.URL.Path, "/_headless_run_") {

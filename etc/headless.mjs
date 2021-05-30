@@ -7,7 +7,7 @@ export class Connection {
     Object.assign(this, properties);
     this.ws = new WebSocket(url);
     this.ws.onmessage = ({data}) => {
-      const json = JSON.parse(data)
+      const json = JSON.parse(data);
       if (this.commands[json.id]) this.commands[json.id](json);
       else this.handlers["on"+json.method]?.(json.params);
     };
@@ -110,7 +110,7 @@ export class Headless {
 
     window.onbeforeunload = () => {
       for (const t of this.browser.targets) this.browser.call("Target.closeTarget", t);
-    }
+    };
 
     document.body.append(document.head.querySelector("template").content);
     this.server.emit("connect", {url});
@@ -141,9 +141,9 @@ function formatConsoleArg({type: t, subtype, value, description, preview}) {
 
 function formatExceptionDetails(exceptionDetails) {
   const {exception: {description}, url, lineNumber, columnNumber} = exceptionDetails;
-  return `${description}\n    at ${url}:${lineNumber}:${columnNumber}`
+  return `${description}\n    at ${url}:${lineNumber}:${columnNumber}`;
 }
 
 function formatErrorMessage(method, params, {message, data, code}) {
-  return `${method}(${JSON.stringify(params)}): ${message} ${data} (${code})`
+  return `${method}(${JSON.stringify(params)}): ${message} ${data} (${code})`;
 }
