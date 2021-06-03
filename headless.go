@@ -106,6 +106,9 @@ func (b *Browser) Start(url string) error {
 }
 
 func (b *Browser) Stop() error {
+	if b.cmd == nil {
+		return nil
+	}
 	cmd := b.cmd
 	b.cmd = nil
 	if err := cmd.Process.Kill(); err != nil {
@@ -119,6 +122,9 @@ func (b *Browser) Stop() error {
 }
 
 func (h *H) Start() error {
+	if h.Browser.cmd != nil {
+		return fmt.Errorf("browser already running")
+	}
 	if h.Port == 0 {
 		h.Port = GetFreePort()
 	}
