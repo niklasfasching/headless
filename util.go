@@ -98,9 +98,15 @@ func TemplateHTML(code string, files, args []string) string {
 }
 
 func CreateHandler(w http.ResponseWriter, r *http.Request) {
-	f, err := os.Create(filepath.Join(".", r.URL.Query().Get("path")))
+	path := filepath.Join(".", r.URL.Query().Get("path"))
+	if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "%s", err)
+		return
+	}
+	f, err := os.Create(path)
 	if err != nil {
-		w.WriteHeader(504)
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "%s", err)
 		return
 	}
