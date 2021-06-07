@@ -22,14 +22,7 @@ func main() {
 	flag.Parse()
 	h := &headless.H{}
 	h.Browser.Args = append(headless.DefaultBrowserArgs, strings.Split(*browserArgs, " ")...)
-	if *display {
-		for i, a := range h.Browser.Args {
-			if a == "--headless" {
-				h.Browser.Args = append(h.Browser.Args[:i], h.Browser.Args[i+1:]...)
-				break
-			}
-		}
-	}
+	h.Browser.DisplayUI = *display
 	h.POSTMux = http.DefaultServeMux
 	if *fs {
 		h.POSTMux.HandleFunc("/create", headless.CreateHandler)

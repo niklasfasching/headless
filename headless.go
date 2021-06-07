@@ -38,6 +38,7 @@ type Browser struct {
 	Executable string
 	Port       int
 	Args       []string
+	DisplayUI  bool
 
 	websocketURL string
 	cmd          *exec.Cmd
@@ -57,7 +58,6 @@ type Run struct {
 }
 
 var DefaultBrowserArgs = []string{
-	"--headless",
 	"--temp-profile",
 	"--hide-scrollbars",
 	"--autoplay-policy=no-user-gesture-required",
@@ -69,6 +69,9 @@ func (b *Browser) Start(url string) error {
 	}
 	if b.Args == nil {
 		b.Args = DefaultBrowserArgs
+	}
+	if !b.DisplayUI {
+		b.Args = append(b.Args, "--headless")
 	}
 	if b.Executable == "" {
 		if executable := os.Getenv("HEADLESS_EXECUTABLE"); executable != "" {
