@@ -1,25 +1,12 @@
 package headless
 
 import (
-	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"io/fs"
-	"net"
-	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 )
-
-//go:embed etc/*
-var etc embed.FS
-var Etc fs.FS
-
-var colorRegexp = regexp.MustCompile(`\bcolor\s*:\s*(\w+)\b`)
 
 var Colors = map[string]int{
 	"none":   0,
@@ -32,28 +19,19 @@ var Colors = map[string]int{
 	"grey":   37,
 }
 
-func init() {
-	if strings.HasPrefix(os.Args[0], "/tmp/go-build") {
-		_, filename, _, _ := runtime.Caller(0)
-		Etc = os.DirFS(filepath.Join(filename, "../etc"))
-	} else {
-		Etc, _ = fs.Sub(etc, "etc")
-	}
-}
+var colorRegexp = regexp.MustCompile(`\bcolor\s*:\s*(\w+)\b`)
+var modulePathRegexp = regexp.MustCompile("^(./|/|https?://)")
 
-func Colorize(m Message) string {
-	if len(m.Args) == 0 {
+func Colorize(args []interface{}) string {
+	if len(args) == 0 {
 		return ""
 	}
-	raw, _ := m.Args[0].(string)
-	if fi, _ := os.Stdout.Stat(); (fi.Mode() & os.ModeCharDevice) == 0 {
-		return strings.ReplaceAll(raw, "%c", "")
-	}
+	raw, _ := args[0].(string)
 	parts := strings.Split(raw, "%c")
 	out := parts[0]
 	for i, part := range parts[1:] {
-		if len(m.Args) > i+1 {
-			colorString, _ := m.Args[i+1].(string)
+		if len(args) > i+1 {
+			colorString, _ := args[i+1].(string)
 			if m := colorRegexp.FindStringSubmatch(colorString); m != nil {
 				out += fmt.Sprintf("\033[%dm", Colors[m[1]])
 			}
@@ -68,48 +46,49 @@ func Colorize(m Message) string {
 	return out
 }
 
-func GetFreePort() int {
-	l, err := net.Listen("tcp", ":0")
+func TemplateHTML(code string, modules, args []string) string {
+	argsBytes, err := json.Marshal(args)
 	if err != nil {
 		panic(err)
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
-}
-
-func HTML(headHTML, templateHTML string) string {
-	bs, _ := fs.ReadFile(Etc, "headless.html")
-	html := strings.ReplaceAll(string(bs), "</template>", templateHTML+"</template>")
-	return strings.ReplaceAll(html, "<!-- head -->", headHTML)
-}
-
-func TemplateHTML(code string, files, args []string) string {
-	argsBytes, _ := json.Marshal(args)
-	html := fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
+	html := "<html>\n<head>\n"
+	html += fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
 	html += `<script type="module" onerror="throw new Error('failed to import files')">` + "\n"
-	for _, f := range files {
-		html += fmt.Sprintf(`import "./%s";`, f) + "\n"
+	for _, m := range modules {
+		if !modulePathRegexp.MatchString(m) {
+			m = "./" + m
+		}
+		html += fmt.Sprintf(`import "%s";`, m) + "\n"
 	}
 	html += "</script>\n"
 	if code != "" {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
-	return html
+	return html + "</head>\n</html>"
 }
 
-func CreateHandler(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Join(".", r.URL.Query().Get("path"))
-	if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "%s", err)
-		return
+func DataURL(mime, s string) string {
+	return fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString([]byte(s)))
+}
+
+func FormatException(m json.RawMessage) string {
+	r := struct {
+		ExceptionDetails struct {
+			LineNumber, ColumnNumber int
+			Url                      string
+			Exception                struct {
+				Description string
+				Value       interface{}
+			}
+		}
+	}{}
+	if err := json.Unmarshal(m, &r); err != nil {
+		panic(err)
 	}
-	f, err := os.Create(path)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "%s", err)
-		return
+	if e := r.ExceptionDetails.Exception; e.Description != "" {
+		return e.Description
+	} else if e.Value != "" {
+		return fmt.Sprintf("Unhandled: %v", e.Value)
 	}
-	defer f.Close()
-	io.Copy(f, r.Body)
+	return fmt.Sprintf("Unhandled %v", r.ExceptionDetails)
 }

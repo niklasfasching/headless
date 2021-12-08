@@ -1,36 +1,16 @@
-* minimal headless script runner
-Usage: =headless [command] [scriptFile] [...args]=
-- command =run=: serve index.html based on script file at =/$(dirname scriptFile)= *and run it*
-- command =serve=: serve index.html based on script file at =/$(dirname scriptFile)=
-
-- command line arguments are available as =window.args=
-- call =window.close(code)= to exit the process
-  - the method is called =close= rather than =exit= because =window.close= always [[https://www.google.com/search?channel=fs&client=ubuntu&q=window+close][exists]] and thus does not couple the script to =headless=
-- call =console.log=, ... to log to the console
-* Ideas
-- console.log overwriting breaks in iframes! need to json stringify in headless :/
-  -> also pass all arguments, not just first stringified!
-  json stringify each unless string?
-- fetch iframe with src proxied through ./ to allow access to contentDocument
-  set iframe.contentWindow.onerror
-  - bundle with a console.info based api to sqlite
 * Example
-=index.js=
-#+begin_src js
-console.log("hello", window.args)
-window.close(42)
-#+end_src
-
 #+begin_src bash
-$ headless run index.js world
-2020/08/31 00:00:00 hello ["world"]
-$ echo $?
-42
+$ headless -c "
+console.log('yolo');
+window.close(1);
+"
+yolo
+exit status 1
 #+end_src
 * Motivation
 I want to run js in a headless browser from bash - e.g. to automate running my clientside js tests.
 There's a lot of js test runners and libraries for controlling headless browsers out there already.
-But those are huge and the [[https://chromedevtools.github.io/devtools-protocol/][devtools protocol]] provides us with all we need with just a websocket connection:
+But those are huge and the [[https://chromedevtools.github.io/devtools-protocol/][devtools protocol]] provides us with all we need:
 - [[https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-navigate][Page.navigate]] + [[https://chromedevtools.github.io/devtools-protocol/tot/Page/#event-frameStoppedLoading][Page.frameStoppedLoading]] to open a page containing the script to run as well as some setup code
 - [[https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#event-exceptionThrown][Runtime.ExceptionThrown]] notifies us of uncaught exceptions
-- [[https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#event-consoleAPICalled][Runtime.consoleAPICalled]] notifies us of console messages. It's used for all communication needs with the backend
+- [[https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#method-addBinding][Runtime.addBinding]] + [[https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#event-bindingCalled][Runtime.bindingCalled]] + [[https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#method-evaluate][Runtime.evaluate]] with a sprinkle of reflection to bridge the gap between between go and js

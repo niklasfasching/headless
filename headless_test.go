@@ -1,108 +1,113 @@
 package headless
 
 import (
-	"context"
-	"encoding/json"
-	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
+	"strconv"
+	"syscall"
 	"testing"
+	"time"
 )
 
-var updateTestData = flag.Bool("update-test-data", false, "update test data rather than actually running tests")
-
-type testCase struct {
-	name   string
-	domain string
-	code   string
-	files  []string
-	args   []string
-
-	messages []Message
-}
-
-var runTestCases = []testCase{
-	{
-		name: "log(log) number and exit 0",
-		code: "console.log(1); console.clear(0)",
-	},
-
-	{
-		name: "log(info) string and exit 1",
-		code: "console.info('foo'); console.clear(1)",
-	},
-
-	{
-		name:  "import module - log(warn) object and exit 0",
-		files: []string{"/testdata/index.mjs"},
-	},
-
-	{
-		name:  "exit with error on import error",
-		files: []string{"./testdata/doesNotExist.mjs"},
-	},
-
-	{
-		name: "log uncaught error",
-		code: "invalid code",
-	},
-	{
-		name: "closes opened child targets with the respective runs",
-		code: `
-          (async () => {
-            const {targetInfos} = await headless.browser.call("Target.getTargets");
-            console.log(targetInfos.length)
-            console.clear(0)
-           })()
-        `,
-	},
-}
-
-func TestRun(t *testing.T) {
-	flag.Parse()
-
-	h := &H{Port: 9001}
-	if err := h.Start(); err != nil {
-		t.Error(err)
-		return
+func TestGeneral(t *testing.T) {
+	h, s, err := startAndOpen("about:blank")
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer h.Stop()
 
-	bs, err := ioutil.ReadFile("testdata/results.json")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	expected := map[string]json.RawMessage{}
-	if !*updateTestData {
-		json.Unmarshal(bs, &expected)
-	}
-	for i, tc := range runTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			key := fmt.Sprintf("%d: %s", i, tc.name)
-			ctx, cancel := context.WithCancel(context.Background())
-			run := h.Run(ctx, HTML("", TemplateHTML(tc.code, tc.files, tc.args)))
-			messages := []Message{}
-			for m := range run.Messages {
-				messages = append(messages, m)
-				if m.Method == "clear" || m.Method == "exception" {
-					cancel()
-				}
-			}
-			cancel()
-			actual, _ := json.MarshalIndent(messages, "  ", "  ")
-			if *updateTestData {
-				expected[key] = actual
-			} else if string(actual) != string(expected[key]) {
-				t.Errorf("messages differ: %s !== %s", string(actual), string(expected[key]))
-			}
-		})
+	// open session
+	r := struct{ TargetInfos []map[string]interface{} }{}
+	if err := h.Exec("Target.getTargets", nil, &r); err != nil {
+		t.Fatal(err)
+	} else if ts := r.TargetInfos; len(ts) != 1 || ts[0]["url"] != "about:blank" {
+		t.Fatalf("unexpected targets: %#v", ts)
 	}
 
-	if *updateTestData {
-		bs, _ := json.MarshalIndent(expected, "", "  ")
-		if err := ioutil.WriteFile("testdata/results.json", bs, 0666); err != nil {
-			t.Error(err)
+	// close session
+	r = struct{ TargetInfos []map[string]interface{} }{}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	} else if err := h.Exec("Target.getTargets", nil, &r); err != nil {
+		t.Fatal(err)
+	} else if ts := r.TargetInfos; len(ts) != 0 {
+		t.Fatalf("target still open: %#v", ts)
+	} else if len(h.sessions) != 0 {
+		t.Fatal("sessions map not cleaned up properly")
+	}
+
+	// stop browser
+	pid := h.cmd.Process.Pid
+	if err := h.Stop(); err != nil {
+		t.Fatal(err)
+	} else if p, err := os.FindProcess(pid); err != nil {
+		t.Fatal(err)
+	} else if err := p.Signal(syscall.SIGCONT); err != os.ErrProcessDone {
+		t.Fatalf("browser still running: %s", err)
+	}
+}
+
+func TestBind(t *testing.T) {
+	h, s, err := startAndOpen("about:blank")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Stop()
+	s.Bind("binding", func(code int, fail bool) (int, error) {
+		if fail {
+			return code, fmt.Errorf("fail")
+		}
+		return code, nil
+	})
+	s.Bind("console.log", func(i int) string {
+		return strconv.Itoa(i)
+	})
+	voidBindingArg := 0
+	s.Bind("voidBinding", func(arg int) {
+		voidBindingArg = arg
+	})
+	s.Bind("variadicBinding", func(fail bool, xs ...int) ([]int, error) {
+		if fail {
+			return nil, fmt.Errorf("fail")
+		}
+		return xs, nil
+	})
+	check := func(jsCall, jsExpect string) {
+		js := fmt.Sprintf(`
+          try {
+            const result = await %[1]s;
+            %[2]s;
+          } catch (result) {
+            %[2]s;
+          }`, jsCall, jsExpect)
+		pass := false
+		if err := s.Eval(js, &pass); err != nil {
+			t.Fatal(err)
+		} else if !pass {
+			t.Fatalf("js: '%s' != '%s'", jsCall, jsExpect)
 		}
 	}
+
+	check(`binding(10, false) `, `result === 10`)
+	check(`binding(10, true)`, `result.constructor.name === 'Error' && result.message === 'fail'`)
+	check(`binding()`, `result.constructor.name === 'Error' && result.message.includes('wrong number of arguments')`)
+	check(`binding(10, true, 20)`, `result.constructor.name === 'Error' && result.message.includes('wrong number of arguments')`)
+	check(`binding('not a number', false)`, `result.constructor.name === 'Error' && result.message.includes('cannot unmarshal string into Go value of type int')`)
+	check(`console.log(123)`, `result === '123'`)
+	check(`variadicBinding(false, 1, 2)`, `JSON.stringify(result) === "[1,2]"`)
+	check(`variadicBinding(false)`, `JSON.stringify(result) === "[]"`)
+	check(`voidBinding(9001)`, `result === undefined`)
+	time.Sleep(50 * time.Millisecond)
+	if voidBindingArg != 9001 {
+		t.Errorf("bad voidBindingArg: %d", voidBindingArg)
+	}
+}
+
+func startAndOpen(url string) (*H, *Session, error) {
+	h, err := Start(nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	s, err := h.Open(url)
+	return h, s, err
 }
