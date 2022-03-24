@@ -41,7 +41,7 @@ func main() {
 	s.Bind("window.close", func(code int) { exitc <- code })
 	s.Handle("Runtime.exceptionThrown", func(m json.RawMessage) { errc <- fmt.Errorf(headless.FormatException(m)) })
 	html := headless.TemplateHTML(*code, flag.Args(), strings.Fields(*windowArgs))
-	if err := s.Open(headless.DataURL("text/html", html)); err != nil {
+	if err := s.Open(html); err != nil {
 		log.Fatal(err)
 	}
 	select {

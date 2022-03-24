@@ -1,7 +1,6 @@
 package headless
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -52,6 +51,7 @@ func TemplateHTML(code string, modules, args []string) string {
 		panic(err)
 	}
 	html := "<html>\n<head>\n"
+	html += `<base href="http://headless.invalid">` + "\n"
 	html += fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
 	html += `<script type="module" onerror="throw new Error('failed to import files')">` + "\n"
 	for _, m := range modules {
@@ -65,10 +65,6 @@ func TemplateHTML(code string, modules, args []string) string {
 		html += fmt.Sprintf(`<script type="module">%s</script>`, "\n"+code+"\n")
 	}
 	return html + "</head>\n</html>"
-}
-
-func DataURL(mime, s string) string {
-	return fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString([]byte(s)))
 }
 
 func FormatException(m json.RawMessage) string {
