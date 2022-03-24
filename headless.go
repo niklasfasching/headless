@@ -185,7 +185,7 @@ func (h *H) exec(sessionID, method string, params, v interface{}) error {
 		if err := json.Unmarshal(r.Error, &e); err != nil {
 			return fmt.Errorf("%s", string(r.Error))
 		}
-		return fmt.Errorf("%v: %v", e["code"], e["message"])
+		return fmt.Errorf("%v: %v (%v)", e["code"], e["message"], e["data"])
 	}
 	if v == nil {
 		return nil
