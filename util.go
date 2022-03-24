@@ -25,7 +25,10 @@ func Colorize(args []interface{}) string {
 	if len(args) == 0 {
 		return ""
 	}
-	raw, _ := args[0].(string)
+	raw, ok := args[0].(string)
+	if !ok {
+		return fmt.Sprintf("%v", args)
+	}
 	parts := strings.Split(raw, "%c")
 	out := parts[0]
 	for i, part := range parts[1:] {
@@ -41,6 +44,9 @@ func Colorize(args []interface{}) string {
 	}
 	if len(parts) > 1 {
 		out += fmt.Sprintf("\033[%dm", Colors["none"])
+	}
+	for _, a := range args[1:] {
+		out += fmt.Sprintf(" %v", a)
 	}
 	return out
 }
