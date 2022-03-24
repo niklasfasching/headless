@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/niklasfasching/headless"
@@ -14,6 +15,7 @@ import (
 var code = flag.String("c", "", "code to run after files have been imported")
 var windowArgs = flag.String("a", "", "window.args - split via strings.Fields")
 var browserArgs = flag.String("b", "", "additional browser args")
+var fs = flag.Bool("fs", false, "rw access to current directory")
 var display = flag.Bool("d", false, "display ui")
 
 func main() {
@@ -39,6 +41,21 @@ func main() {
 	s.Bind("console.log", func(args ...interface{}) { fmt.Fprintln(os.Stdout, headless.Colorize(args)) })
 	s.Bind("console.error", func(args ...interface{}) { fmt.Fprintln(os.Stderr, headless.Colorize(args)) })
 	s.Bind("window.close", func(code int) { exitc <- code })
+
+	if *fs {
+		s.Bind("writeFile", func(path, body string) error {
+			path = filepath.Join(".", path)
+			if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
+				return err
+			}
+			return os.WriteFile(path, []byte(body), 0644)
+		})
+		s.Bind("readFile", func(path string) (string, error) {
+			bs, err := os.ReadFile(filepath.Join(".", path))
+			return string(bs), err
+		})
+	}
+
 	s.Handle("Runtime.exceptionThrown", func(m json.RawMessage) { errc <- fmt.Errorf(headless.FormatException(m)) })
 	html := headless.TemplateHTML(*code, flag.Args(), strings.Fields(*windowArgs))
 	if err := s.Open(html); err != nil {
