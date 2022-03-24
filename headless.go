@@ -203,7 +203,7 @@ func (h *H) send(bs []byte) error {
 }
 
 func (h *H) loop() error {
-	c := make(chan func(), 2)
+	c := make(chan func(), 100)
 	go func() {
 		for f := range c {
 			f()
@@ -245,7 +245,11 @@ func (h *H) loop() error {
 				if err := json.Unmarshal(m.Params, av.Interface()); err != nil {
 					return fmt.Errorf("could not marshal %s into %T", string(m.Params), av.Interface())
 				}
-				c <- func() { hv.Call([]reflect.Value{av.Elem()}) }
+				select {
+				case c <- func() { hv.Call([]reflect.Value{av.Elem()}) }:
+				default:
+					panic(fmt.Sprintf("cannot enqueue %s", string(m.Params)))
+				}
 			}
 		} else {
 			h.Lock()
