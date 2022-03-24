@@ -102,8 +102,10 @@ func (s *Session) onBindingCalled(m struct{ Name, Payload string }) {
 		panic(err)
 	}
 	isVoid, isErr, arg := fv.Type().NumOut() == 0, "false", "null"
-	if v, err := callBoundFunc(fv, p.Args); isVoid {
+	if v, err := callBoundFunc(fv, p.Args); isVoid && err == nil {
 		return
+	} else if isVoid && err != nil {
+		panic(fmt.Sprintf("%s %s - %s", m.Name, m.Payload, err))
 	} else if err != nil {
 		isErr, arg = "true", fmt.Sprintf(`new Error("%s")`, err.Error())
 	} else if vbs, err := json.Marshal(v); err != nil {
