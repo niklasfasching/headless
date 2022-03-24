@@ -126,6 +126,7 @@ func (h *H) Open(url string) (*Session, error) {
 		h:        h,
 		handlers: map[string][]reflect.Value{},
 		bindings: map[string]reflect.Value{},
+		Err:      make(chan error),
 	}
 	h.Lock()
 	h.sessions[ar.SessionId] = s
@@ -136,6 +137,7 @@ func (h *H) Open(url string) (*Session, error) {
 		}
 	}
 	s.Handle("Runtime.bindingCalled", s.onBindingCalled)
+	s.Handle("Runtime.exceptionThrown", func(m json.RawMessage) { s.Err <- fmt.Errorf(FormatException(m)) })
 	return s, nil
 }
 

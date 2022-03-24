@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+type ExitErr int
+
 var Colors = map[string]int{
 	"none":   0,
 	"red":    31,
@@ -20,6 +22,8 @@ var Colors = map[string]int{
 
 var colorRegexp = regexp.MustCompile(`\bcolor\s*:\s*(\w+)\b`)
 var modulePathRegexp = regexp.MustCompile("^(./|/|https?://)")
+
+func (e ExitErr) Error() string { return fmt.Sprintf("exit code: %v", int(e)) }
 
 func Colorize(args []interface{}) string {
 	if len(args) == 0 {

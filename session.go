@@ -13,6 +13,7 @@ type Session struct {
 	h        *H
 	handlers map[string][]reflect.Value
 	bindings map[string]reflect.Value
+	Err      chan error
 	sync.Mutex
 }
 
@@ -105,7 +106,8 @@ func (s *Session) onBindingCalled(m struct{ Name, Payload string }) {
 	if v, err := callBoundFunc(fv, p.Args); isVoid && err == nil {
 		return
 	} else if isVoid && err != nil {
-		panic(fmt.Sprintf("%s %s - %s", m.Name, m.Payload, err))
+		s.Err <- fmt.Errorf("%s %s - %s", m.Name, m.Payload, err)
+		return
 	} else if err != nil {
 		isErr, arg = "true", fmt.Sprintf(`new Error("%s")`, err.Error())
 	} else if vbs, err := json.Marshal(v); err != nil {

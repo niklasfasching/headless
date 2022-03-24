@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -37,10 +36,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	exitc, errc := make(chan int), make(chan error)
 	s.Bind("console.log", func(args ...interface{}) { fmt.Fprintln(os.Stdout, headless.Colorize(args)) })
 	s.Bind("console.error", func(args ...interface{}) { fmt.Fprintln(os.Stderr, headless.Colorize(args)) })
-	s.Bind("window.close", func(code int) { exitc <- code })
+	s.Bind("window.close", func(code int) { s.Err <- headless.ExitErr(code) })
 
 	if *fs {
 		s.Bind("writeFile", func(path, body string) error {
@@ -55,16 +53,15 @@ func main() {
 			return string(bs), err
 		})
 	}
-
-	s.Handle("Runtime.exceptionThrown", func(m json.RawMessage) { errc <- fmt.Errorf(headless.FormatException(m)) })
 	html := headless.TemplateHTML(*code, flag.Args(), strings.Fields(*windowArgs))
 	if err := s.Open(html); err != nil {
 		log.Fatal(err)
 	}
 	select {
-	case err := <-errc:
+	case err := <-s.Err:
+		if code, ok := err.(headless.ExitErr); ok {
+			os.Exit(int(code))
+		}
 		log.Fatal(err)
-	case code := <-exitc:
-		os.Exit(code)
 	}
 }
