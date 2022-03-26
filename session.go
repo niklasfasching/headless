@@ -31,6 +31,10 @@ func (s *Session) Exec(method string, params, v interface{}) error {
 	return s.h.exec(s.id, method, params, v)
 }
 
+func (s *Session) Visit(url string) error {
+	return s.Exec("Page.navigate", Params{"url": url}, nil)
+}
+
 func (s *Session) Open(html string) error {
 	return s.Exec("Page.setDocumentContent", Params{"html": html, "frameId": s.targetID}, nil)
 }

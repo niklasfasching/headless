@@ -54,7 +54,7 @@ func main() {
 		})
 	}
 	html := headless.TemplateHTML(*code, flag.Args(), strings.Fields(*windowArgs))
-	if err := s.Exec("Page.navigate", map[string]string{"url": "http://headless.invalid"}, nil); err != nil {
+	if err := s.Visit("http://headless.invalid"); err != nil {
 		log.Fatal(err)
 	}
 	if err := s.Open(html); err != nil {
