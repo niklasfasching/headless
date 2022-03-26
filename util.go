@@ -61,7 +61,6 @@ func TemplateHTML(code string, modules, args []string) string {
 		panic(err)
 	}
 	html := "<html>\n<head>\n"
-	html += `<base href="http://headless.invalid">` + "\n"
 	html += fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
 	html += `<script type="module" onerror="throw new Error('failed to import files')">` + "\n"
 	for _, m := range modules {
