@@ -39,6 +39,7 @@ func Colorize(args []interface{}) string {
 		if len(args) > i+1 {
 			colorString, _ := args[i+1].(string)
 			if m := colorRegexp.FindStringSubmatch(colorString); m != nil {
+				args[i+1] = ""
 				out += fmt.Sprintf("\033[%dm", Colors[m[1]])
 			}
 		} else {
