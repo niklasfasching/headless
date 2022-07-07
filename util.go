@@ -61,7 +61,7 @@ func TemplateHTML(code string, modules, args []string) string {
 	if err != nil {
 		panic(err)
 	}
-	html := "<html>\n<head>\n"
+	html := "<!DOCTYPE html><html>\n<head>\n"
 	html += fmt.Sprintf("<script>window.args = %s;</script>\n", string(argsBytes))
 	html += `<script type="module" onerror="throw new Error('failed to import files')">` + "\n"
 	for _, m := range modules {
