@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"reflect"
 	"sync"
+	"time"
 )
 
 type H struct {
@@ -249,7 +250,7 @@ func (h *H) loop() error {
 				}
 				select {
 				case c <- func() { hv.Call([]reflect.Value{av.Elem()}) }:
-				default:
+				case <-time.After(10 * time.Second):
 					panic(fmt.Sprintf("cannot enqueue %s", string(m.Params)))
 				}
 			}
